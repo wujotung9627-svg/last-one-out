@@ -6,525 +6,352 @@
     "貼在布告欄上的月考排名"
   ],
   "memories_en": [
-    "There was a big banyan tree at the end of the corridor",
-    "My homeroom teacher never called me by my name",
-    "The monthly exam rankings posted on the bulletin board"
+    "A big banyan tree right past the end of the corridor",
+    "A homeroom teacher who never called me by name",
+    "The monthly exam rankings pinned on the bulletin board"
   ],
+  "bible": {
+    "year": 2008,
+    "scores": [
+      {
+        "subject": "國文",
+        "subject_en": "Chinese",
+        "score": 47
+      },
+      {
+        "subject": "數學",
+        "subject_en": "Mathematics",
+        "score": 39
+      },
+      {
+        "subject": "英文",
+        "subject_en": "English",
+        "score": 52
+      }
+    ],
+    "pa": {
+      "zh": "請今天的值日生，現在到教師辦公室一趟。",
+      "en": "The student on duty today, please come to the teachers' office now."
+    }
+  },
   "walks": [
     {
       "index": 0,
       "scenes": [
         {
           "id": "corridor",
-          "photo": "photos/6aa205205796.jpg",
-          "depth": "photos/fb9c2696e913.webp",
+          "photo": "photos/127a13646e23.jpg",
+          "depth": "photos/519736936ec0.webp",
           "doors": [
             {
-              "x": 0.853125,
-              "y": 0.05234375,
-              "w": 0.1265625,
-              "h": 0.86640625
+              "x": 0.7421875,
+              "y": 0.0421875,
+              "w": 0.041666666666666664,
+              "h": 0.65234375
             },
             {
-              "x": 0.7479166666666667,
-              "y": 0.16015625,
-              "w": 0.07916666666666666,
-              "h": 0.58203125
-            },
-            {
-              "x": 0.7,
-              "y": 0.2234375,
-              "w": 0.04114583333333333,
-              "h": 0.409375
+              "x": 0.9744791666666667,
+              "y": 0,
+              "w": 0.025,
+              "h": 0.921875
             }
-          ],
-          "board": null
+          ]
         },
         {
           "id": "door",
-          "photo": "photos/e101b0028fd3.jpg",
-          "depth": "photos/deeafa0acd33.webp",
+          "photo": "photos/89af7d79cc38.jpg",
+          "depth": "photos/ba29790a0c56.webp",
           "doors": [
             {
-              "x": 0.2708333333333333,
-              "y": 0.159375,
-              "w": 0.14375,
-              "h": 0.57109375
-            },
-            {
-              "x": 0.5145833333333333,
-              "y": 0.18828125,
-              "w": 0.125,
-              "h": 0.453125
-            },
-            {
-              "x": 0.7265625,
-              "y": 0.29296875,
-              "w": 0.014583333333333334,
-              "h": 0.2109375
+              "x": 0.6296875,
+              "y": 0.12109375,
+              "w": 0.1984375,
+              "h": 0.74296875
             }
-          ],
-          "board": null
+          ]
         },
         {
           "id": "classroom",
-          "photo": "photos/db289b9383fd.jpg",
-          "depth": "photos/f8629b1a91b0.webp",
+          "photo": "photos/605044896c92.jpg",
+          "depth": "photos/e996c9398de0.webp",
           "doors": [
             {
-              "x": 0.9572916666666667,
-              "y": 0.059375,
-              "w": 0.0421875,
-              "h": 0.559375
-            },
-            {
-              "x": 0.8541666666666666,
-              "y": 0.3484375,
-              "w": 0.0515625,
-              "h": 0.221875
+              "x": 0.8765625,
+              "y": 0.146875,
+              "w": 0.029166666666666667,
+              "h": 0.5453125
             }
           ],
           "board": {
-            "x": 0.12552083333333333,
-            "y": 0.12265625,
-            "w": 0.4088541666666667,
-            "h": 0.2140625
-          }
+            "x": 0.10208333333333333,
+            "y": 0.16015625,
+            "w": 0.3963541666666667,
+            "h": 0.21953125
+          },
+          "tv": {
+            "x": 0.8125,
+            "y": 0,
+            "w": 0.11614583333333334,
+            "h": 0.15390625
+          },
+          "papers": []
         }
-      ]
+      ],
+      "flicker": null,
+      "scare": null
     },
     {
       "index": 1,
       "scenes": [
         {
           "id": "corridor",
-          "photo": "photos/c7a6be047e7b.webp",
-          "depth": "photos/3c42f905bef4.webp",
+          "photo": "photos/457ae95a1485.webp",
+          "depth": "photos/5c15e28d2e2e.webp",
           "doors": [
             {
-              "x": 0.8520833333333333,
-              "y": 0.0515625,
-              "w": 0.12708333333333333,
-              "h": 0.86640625
+              "x": 0.6713541666666667,
+              "y": 0.18515625,
+              "w": 0.08229166666666667,
+              "h": 0.51015625
             },
             {
-              "x": 0.746875,
-              "y": 0.1609375,
-              "w": 0.07864583333333333,
-              "h": 0.58046875
+              "x": 0.9692708333333333,
+              "y": 0.003125,
+              "w": 0.030208333333333334,
+              "h": 0.91875
             },
             {
-              "x": 0.6973958333333333,
-              "y": 0.221875,
-              "w": 0.041666666666666664,
-              "h": 0.4109375
+              "x": 0.5770833333333333,
+              "y": 0.290625,
+              "w": 0.04375,
+              "h": 0.25234375
+            },
+            {
+              "x": 0.5552083333333333,
+              "y": 0.315625,
+              "w": 0.0234375,
+              "h": 0.19609375
             }
-          ],
-          "board": null
+          ]
         },
         {
           "id": "door",
-          "photo": "photos/0a5f0f2f08a3.webp",
-          "depth": "photos/fd2dd2461f5e.webp",
+          "photo": "photos/1a68bb3adb41.webp",
+          "depth": "photos/f98556d8d47f.webp",
           "doors": [
             {
-              "x": 0.2708333333333333,
-              "y": 0.15859375,
-              "w": 0.14375,
-              "h": 0.57109375
+              "x": 0.6755208333333333,
+              "y": 0.1203125,
+              "w": 0.14947916666666666,
+              "h": 0.74375
             },
             {
-              "x": 0.5135416666666667,
-              "y": 0.1890625,
-              "w": 0.12395833333333334,
-              "h": 0.45234375
+              "x": 0.4114583333333333,
+              "y": 0.334375,
+              "w": 0.04895833333333333,
+              "h": 0.1875
             },
             {
-              "x": 0.7260416666666667,
-              "y": 0.290625,
-              "w": 0.013541666666666667,
-              "h": 0.21328125
+              "x": 0.4588541666666667,
+              "y": 0.3390625,
+              "w": 0.04739583333333333,
+              "h": 0.18125
             }
-          ],
-          "board": null
+          ]
         },
         {
-          "id": "classroom",
-          "photo": "photos/a4972e1b87d8.webp",
-          "depth": "photos/495458996469.webp",
+          "id": "office",
+          "photo": "photos/a7477d7f1ad3.jpg",
+          "depth": "photos/d67433aa1894.webp",
           "doors": [
             {
-              "x": 0.9567708333333333,
-              "y": 0.06015625,
-              "w": 0.042708333333333334,
-              "h": 0.55859375
-            },
-            {
-              "x": 0.8541666666666666,
-              "y": 0.34921875,
-              "w": 0.050520833333333334,
-              "h": 0.22109375
-            },
-            {
-              "x": 0.5958333333333333,
-              "y": 0.38671875,
-              "w": 0.03229166666666667,
-              "h": 0.14296875
+              "x": 0,
+              "y": 0,
+              "w": 0.1734375,
+              "h": 0.99921875
             }
           ],
           "board": {
-            "x": 0.1265625,
-            "y": 0.125,
-            "w": 0.4078125,
-            "h": 0.2109375
+            "x": 0.5666666666666667,
+            "y": 0.09140625,
+            "w": 0.08802083333333334,
+            "h": 0.159375
+          },
+          "papers": [
+            {
+              "x": 0.26197916666666665,
+              "y": 0.7484375,
+              "w": 0.2546875,
+              "h": 0.20546875
+            },
+            {
+              "x": 0.49375,
+              "y": 0.54140625,
+              "w": 0.16197916666666667,
+              "h": 0.07890625
+            },
+            {
+              "x": 0.140625,
+              "y": 0.5578125,
+              "w": 0.11979166666666667,
+              "h": 0.0875
+            }
+          ],
+          "notice": {
+            "x": 0.6671875,
+            "y": 0.0375,
+            "w": 0.16041666666666668,
+            "h": 0.20859375
           }
         }
-      ]
+      ],
+      "flicker": {
+        "scene": "corridor",
+        "photo": "photos/e1a6bb277feb.webp"
+      },
+      "scare": {
+        "after": "door",
+        "kind": "teacher",
+        "photo": "photos/0000da49298b.webp"
+      }
     },
     {
       "index": 2,
       "scenes": [
         {
           "id": "corridor",
-          "photo": "photos/9bf95b775464.webp",
-          "depth": "photos/6ebf6c01ddcc.webp",
+          "photo": "photos/09ad3a7d82c6.webp",
+          "depth": "photos/daea2458e92c.webp",
           "doors": [
             {
-              "x": 0.8479166666666667,
-              "y": 0.04921875,
-              "w": 0.1328125,
-              "h": 0.86796875
+              "x": 0.6682291666666667,
+              "y": 0.18515625,
+              "w": 0.084375,
+              "h": 0.35078125
             },
             {
-              "x": 0.7421875,
-              "y": 0.1609375,
-              "w": 0.07916666666666666,
-              "h": 0.58046875
+              "x": 0.9682291666666667,
+              "y": 0,
+              "w": 0.03125,
+              "h": 0.9234375
             },
             {
-              "x": 0.6927083333333334,
-              "y": 0.22265625,
-              "w": 0.040625,
-              "h": 0.41015625
-            }
-          ],
-          "board": null
-        },
-        {
-          "id": "door",
-          "photo": "photos/0a5f0f2f08a3.webp",
-          "depth": "photos/fd2dd2461f5e.webp",
-          "doors": [
-            {
-              "x": 0.2708333333333333,
-              "y": 0.15859375,
-              "w": 0.14375,
-              "h": 0.57109375
-            },
-            {
-              "x": 0.5135416666666667,
-              "y": 0.1890625,
-              "w": 0.12395833333333334,
-              "h": 0.45234375
-            },
-            {
-              "x": 0.7260416666666667,
-              "y": 0.290625,
-              "w": 0.013541666666666667,
-              "h": 0.21328125
-            }
-          ],
-          "board": null
-        },
-        {
-          "id": "classroom",
-          "photo": "photos/744948df25f7.webp",
-          "depth": "photos/b64417ad1889.webp",
-          "doors": [
-            {
-              "x": 0.9557291666666666,
-              "y": 0.0609375,
+              "x": 0.5739583333333333,
+              "y": 0.29140625,
               "w": 0.04375,
-              "h": 0.5578125
+              "h": 0.25234375
             },
             {
-              "x": 0.6328125,
-              "y": 0.4,
-              "w": 0.051041666666666666,
-              "h": 0.15078125
-            },
-            {
-              "x": 0.5953125,
-              "y": 0.3875,
-              "w": 0.03229166666666667,
-              "h": 0.14140625
+              "x": 0.5526041666666667,
+              "y": 0.315625,
+              "w": 0.022395833333333334,
+              "h": 0.196875
             }
-          ],
-          "board": {
-            "x": 0.12760416666666666,
-            "y": 0.125,
-            "w": 0.40572916666666664,
-            "h": 0.2109375
-          }
-        }
-      ]
-    },
-    {
-      "index": 3,
-      "scenes": [
-        {
-          "id": "corridor",
-          "photo": "photos/0a341475fbf9.webp",
-          "depth": "photos/2b7477528df0.webp",
-          "doors": [
-            {
-              "x": 0.8442708333333333,
-              "y": 0.053125,
-              "w": 0.134375,
-              "h": 0.8609375
-            },
-            {
-              "x": 0.7385416666666667,
-              "y": 0.15234375,
-              "w": 0.07864583333333333,
-              "h": 0.5859375
-            },
-            {
-              "x": 0.6885416666666667,
-              "y": 0.2171875,
-              "w": 0.04010416666666667,
-              "h": 0.4125
-            }
-          ],
-          "board": null
+          ]
         },
         {
           "id": "door",
-          "photo": "photos/142f8b9f5d40.webp",
-          "depth": "photos/26d6b62aa3f0.webp",
+          "photo": "photos/63cbc32cf12e.webp",
+          "depth": "photos/c50357ecc5ce.webp",
           "doors": [
             {
-              "x": 0.5104166666666666,
-              "y": 0.1859375,
-              "w": 0.13020833333333334,
-              "h": 0.46015625
+              "x": 0.675,
+              "y": 0.1203125,
+              "w": 0.1484375,
+              "h": 0.7421875
             },
             {
-              "x": 0.35572916666666665,
-              "y": 0.1765625,
-              "w": 0.059375,
-              "h": 0.521875
-            },
-            {
-              "x": 0.725,
-              "y": 0.290625,
-              "w": 0.0140625,
-              "h": 0.2140625
+              "x": 0.253125,
+              "y": 0.190625,
+              "w": 0.14427083333333332,
+              "h": 0.3265625
             }
-          ],
-          "board": null
+          ]
         },
         {
           "id": "classroom",
-          "photo": "photos/59f8e650e124.webp",
-          "depth": "photos/a34830a04eb4.webp",
+          "photo": "photos/af8e513d554e.webp",
+          "depth": "photos/5c229a942cc4.webp",
           "doors": [
             {
-              "x": 0.9541666666666667,
-              "y": 0.0609375,
-              "w": 0.0453125,
-              "h": 0.55703125
-            },
-            {
-              "x": 0.6411458333333333,
-              "y": 0.2515625,
-              "w": 0.023958333333333335,
-              "h": 0.07578125
-            },
-            {
-              "x": 0.61875,
-              "y": 0.253125,
-              "w": 0.022916666666666665,
-              "h": 0.07265625
+              "x": 0.8140625,
+              "y": 0.1875,
+              "w": 0.06822916666666666,
+              "h": 0.43359375
             }
           ],
           "board": {
-            "x": 0.128125,
-            "y": 0.1265625,
-            "w": 0.4041666666666667,
-            "h": 0.209375
-          }
+            "x": 0.10520833333333333,
+            "y": 0.15859375,
+            "w": 0.39375,
+            "h": 0.21640625
+          },
+          "tv": {
+            "x": 0.8109375,
+            "y": 0,
+            "w": 0.11666666666666667,
+            "h": 0.15234375
+          },
+          "papers": [
+            {
+              "x": 0.2864583333333333,
+              "y": 0.7375,
+              "w": 0.3307291666666667,
+              "h": 0.1234375
+            }
+          ],
+          "after": "photos/c65e617bdad1.webp"
         }
-      ]
-    },
-    {
-      "index": 4,
-      "scenes": [
-        {
-          "id": "corridor",
-          "photo": "photos/31e19eaa7d91.webp",
-          "depth": "photos/74b5987d298f.webp",
-          "doors": [
-            {
-              "x": 0.809375,
-              "y": 0,
-              "w": 0.140625,
-              "h": 0.678125
-            },
-            {
-              "x": 0.6989583333333333,
-              "y": 0.06875,
-              "w": 0.0734375,
-              "h": 0.54765625
-            },
-            {
-              "x": 0.65,
-              "y": 0.21171875,
-              "w": 0.0359375,
-              "h": 0.36875
-            }
-          ],
-          "board": null
-        },
-        {
-          "id": "door",
-          "photo": "photos/2ccb89bc3756.webp",
-          "depth": "photos/6a7d8d122eec.webp",
-          "doors": [
-            {
-              "x": 0.3614583333333333,
-              "y": 0.17734375,
-              "w": 0.0515625,
-              "h": 0.49765625
-            },
-            {
-              "x": 0.6052083333333333,
-              "y": 0.234375,
-              "w": 0.025520833333333333,
-              "h": 0.42109375
-            },
-            {
-              "x": 0.7072916666666667,
-              "y": 0.39296875,
-              "w": 0.016666666666666666,
-              "h": 0.215625
-            }
-          ],
-          "board": null
-        },
-        {
-          "id": "classroom",
-          "photo": "photos/1eced454d9cb.webp",
-          "depth": "photos/2c09a4d0779b.webp",
-          "doors": [
-            {
-              "x": 0.9427083333333334,
-              "y": 0,
-              "w": 0.05677083333333333,
-              "h": 0.54765625
-            },
-            {
-              "x": 0.6026041666666667,
-              "y": 0.228125,
-              "w": 0.021354166666666667,
-              "h": 0.0703125
-            }
-          ],
-          "board": {
-            "x": 0.134375,
-            "y": 0.1140625,
-            "w": 0.384375,
-            "h": 0.1984375
-          }
-        }
-      ]
+      ],
+      "flicker": {
+        "scene": "corridor",
+        "photo": "photos/539c1da0efa7.webp"
+      },
+      "scare": {
+        "after": "classroom",
+        "kind": "turn",
+        "photo": "photos/c2492ef20a76.webp"
+      }
     }
   ],
   "draws": [
     {
       "cards": [
         {
-          "title": "有一盞燈熄了",
-          "whisper": "它剛剛還亮著。",
-          "title_en": "One Light Went Out",
-          "whisper_en": "It was on just now.",
+          "title": "燈暗了走廊變長",
+          "whisper": "後面的路，比剛才更長了。",
+          "title_en": "The Light Went Out and the Corridor Lengthened",
+          "whisper_en": "The way behind is longer than before.",
           "edits": {
-            "corridor": "Edit the existing corridor photo: turn one single ceiling fluorescent tube light completely dark and unlit while all other lights stay on, clearly visible.",
-            "door": "",
-            "classroom": "Edit the existing classroom photo: make one ceiling tube light directly above the blackboard dark and dead while the rest stay lit."
+            "corridor": "Make the nearest long white fluorescent tube light above the stone sinks dark and unlit, stretch the corridor beyond it to be far too long, leave all the brown wooden classroom doors on the right standing ajar, and make the banyan canopy at the corridor end hang lower with one aerial root touching the floor.",
+            "door": "Place the red duty bucket with the string mop standing inside the classroom among the wooden-topped student desks where it could not be, with a wet mop trail running up the white wall beside the green sliding door, and show the same green sliding door repeating into the distance inside.",
+            "office": "On top of one wooden teacher's desk, place the small red duty bucket where it could not be, with a wet mop trail running up the side of the desk."
           },
-          "edit": "Edit the existing corridor photo: turn one single ceiling fluorescent tube light completely dark and unlit while all other lights stay on, clearly visible.",
-          "sound": "silence"
+          "sound": "echo"
         },
         {
-          "title": "紅水桶站錯地方",
-          "whisper": "那不是它該站的地方。",
-          "title_en": "The Red Bucket Stands Wrong",
-          "whisper_en": "That is not where it should stand.",
+          "title": "門牌歪了沒名字",
+          "whisper": "它記得你，卻不叫你。",
+          "title_en": "The Name Holder Hangs Crooked and Empty",
+          "whisper_en": "It remembers you, but will not call you.",
           "edits": {
-            "corridor": "Edit the existing corridor photo: place a faded old red plastic duty bucket upside-down balanced impossibly in the middle of the empty corridor floor.",
-            "door": "Edit the existing classroom door photo: place the same faded red plastic bucket perched precariously on top of the narrow door frame above the door.",
-            "classroom": "Edit the existing classroom photo: place the same faded red plastic bucket standing alone on top of the teacher's lectern desk."
+            "corridor": "Make one long white fluorescent tube light in the middle dark, stretch the corridor beyond it far too long, leave every brown wooden classroom door on the right standing ajar, and show the same brown door repeating into the distance at the far end.",
+            "door": "Leave the clear empty name-plate holder on the white wall beside the green sliding door hanging crooked and slightly open, place the red bucket with the mop standing on the wooden shoe cabinet where it could not be, with the wet mop trail running up the wall beside the cabinet.",
+            "office": "Hang a small clear empty name-plate holder crooked and slightly open on the edge of a wooden teacher's desk, with the brown wooden attendance clipboard lying beside it."
           },
-          "edit": "Edit the existing corridor photo: place a faded old red plastic duty bucket upside-down balanced impossibly in the middle of the empty corridor floor.",
           "sound": "water"
         },
         {
-          "title": "拖把水痕爬牆了",
-          "whisper": "水痕一路爬上牆。",
-          "title_en": "The Mop Trail Climbs",
-          "whisper_en": "The wet trail climbs up the wall.",
+          "title": "排名掉下一張紙",
+          "whisper": "有一張，從上面滑下來了。",
+          "title_en": "One Ranking Sheet Slipped Down",
+          "whisper_en": "One sheet has slipped down from the top.",
           "edits": {
-            "corridor": "Edit the existing corridor photo: add a dark wet mop trail on the floor that impossibly leaves the floor and runs vertically up the corridor wall.",
-            "door": "Edit the existing classroom door photo: show every classroom door along the corridor left ajar open by the same narrow dark gap.",
-            "classroom": "Edit the existing classroom photo: add a dark wet mop streak that runs from the floor vertically up the classroom wall beside the blackboard."
+            "corridor": "Make the farthest long white fluorescent tube light dark, stretch the corridor beyond it far too long, leave all brown wooden classroom doors on the right standing ajar, and make one blank white ranking sheet on the cork bulletin board on the right slip down hanging by a single pin.",
+            "door": "Show the same green sliding classroom door repeating into the distance through the open doorway, with the wet mop trail running up the white pillar beside the wooden shoe cabinet and the red bucket standing inside the classroom doorway where it could not be.",
+            "office": "Pin one blank white ranking sheet slipping down by a single pin on a cork board in the office, with every office door left ajar in the background."
           },
-          "edit": "Edit the existing corridor photo: add a dark wet mop trail on the floor that impossibly leaves the floor and runs vertically up the corridor wall.",
-          "sound": "echo"
-        }
-      ],
-      "picked": 1
-    },
-    {
-      "cards": [
-        {
-          "title": "排名貼滿了牆",
-          "whisper": "名字都不見了，只剩名次。",
-          "title_en": "Rankings Cover the Walls",
-          "whisper_en": "The names are gone, only ranks remain.",
-          "edits": {
-            "corridor": "Edit the existing corridor photo: stretch the corridor to look impossibly long vanishing to a tiny point, and cover both walls floor-to-ceiling with many blank off-white ranking sheets with no readable text, no letters, no numbers.",
-            "door": "",
-            "classroom": "Edit the existing classroom photo: add tall stacks of blank test papers with no readable text piled up to the ceiling along the back wall, with faint red pen circles and strokes but no words or numbers."
-          },
-          "edit": "Edit the existing corridor photo: stretch the corridor to look impossibly long vanishing to a tiny point, and cover both walls floor-to-ceiling with many blank off-white ranking sheets with no readable text, no letters, no numbers.",
-          "sound": "papers"
-        },
-        {
-          "title": "老師不叫名字",
-          "whisper": "那張椅子，還在門外等。",
-          "title_en": "The Teacher Never Calls My Name",
-          "whisper_en": "That chair is still waiting outside the door.",
-          "edits": {
-            "corridor": "Edit the existing corridor photo: duplicate the same classroom door repeating into an impossibly distant corridor, and add a dark out-of-focus adult silhouette far away at the end with back turned, no face visible.",
-            "door": "Edit the existing classroom door photo: place one single empty wooden student chair alone outside the closed door facing the wall, and lower the ceiling to hang far too low over it.",
-            "classroom": ""
-          },
-          "edit": "Edit the existing corridor photo: duplicate the same classroom door repeating into an impossibly distant corridor, and add a dark out-of-focus adult silhouette far away at the end with back turned, no face visible.",
           "sound": "silence"
-        },
-        {
-          "title": "沒人面向我",
-          "whisper": "榕樹在窗外看著我。",
-          "title_en": "No One Faces Me",
-          "whisper_en": "The banyan watches me from outside.",
-          "edits": {
-            "corridor": "Edit the existing corridor photo: move all windows to the wrong side of the corridor and tilt the floor sideways, with dense dark banyan tree branches and leaves pressing against the glass from outside.",
-            "door": "Edit the existing classroom door photo: line up pairs of white sneakers and canvas shoes neatly under the doorway edge as if left behind, no people.",
-            "classroom": "Edit the existing classroom photo: mirror the room layout and push every desk and chair away to the edges leaving one single desk alone in the middle, with a Taiwanese school bag hanging on every desk and a short-sleeved white school shirt with navy trim draped over every chair, mixing navy trousers and pleated navy-plaid skirts, no crests, no badges, no text, no people."
-          },
-          "edit": "Edit the existing corridor photo: move all windows to the wrong side of the corridor and tilt the floor sideways, with dense dark banyan tree branches and leaves pressing against the glass from outside.",
-          "sound": "chair"
         }
       ],
       "picked": 0
@@ -532,85 +359,69 @@
     {
       "cards": [
         {
-          "title": "只剩你沒位置",
-          "whisper": "大家都坐好了，就你沒有。",
-          "title_en": "No Seat Left for You",
-          "whisper_en": "Everyone is seated, except you.",
+          "title": "榕樹垂下遮住走廊",
+          "whisper": "大家都還坐在那裡，等你。",
+          "title_en": "The Banyan Hangs Over the Corridor",
+          "whisper_en": "They are all still sitting there, waiting for you.",
           "edits": {
-            "corridor": "Edit the existing corridor photo: line up many pairs of white sneakers and canvas shoes in two neat rows along both walls of the corridor, empty with no people, no faces.",
-            "door": "Edit the existing door photo: place one single lonely wooden student chair alone outside the classroom door facing the door, empty with no people.",
-            "classroom": "Edit the existing classroom photo: drape a short-sleeved white Taiwanese school shirt with navy trim over the back of every chair (mixed with navy trousers for boys and pleated navy-plaid skirts for girls, a few bow ties, a few navy and dark-red jackets, no crests, no badges, no names), push every desk away to leave one single desk isolated alone in the middle, with every chair turned away from it, no people, no faces, no readable text."
+            "corridor": "At the far corridor end where the banyan tree is visible, add many thick hanging aerial roots down across the opening like a dark curtain with leaves pressing against the corridor end, clearly visible beyond the open wooden doors.",
+            "door": "Drape a Taiwanese white short-sleeved uniform shirt with navy trim on the back of every visible wooden student desk chair seen through the open green sliding door, no faces, no crests, no text.",
+            "classroom": "Across the wet classroom floor between the wooden student desks, add long dark shadows of a whole seated class with nobody casting them, clearly visible stretching from the empty chairs."
           },
-          "edit": "Edit the existing corridor photo: line up many pairs of white sneakers and canvas shoes in two neat rows along both walls of the corridor, empty with no people, no faces.",
+          "sound": "silence"
+        },
+        {
+          "title": "空名牌掉在門下",
+          "whisper": "老師從來沒叫過你。",
+          "title_en": "The Empty Name Tag Fell Down",
+          "whisper_en": "The teacher never once called your name.",
+          "edits": {
+            "corridor": "On the right side of the corridor, hang a Taiwanese white short-sleeved shirt with navy trim and a pleated navy-plaid skirt on each of the three wooden-topped student desks, and turn all three desks to face the camera.",
+            "door": "Below the green sliding door on the right, show the small clear empty name-plate holder fallen on the wet floor, lit by harsh light, still empty with no text, next to the pair of white sneakers.",
+            "classroom": "Push every wooden-topped student desk with steel legs to the sides of the classroom away from one single desk left alone in the center foreground, and turn every wooden chair to face the camera."
+          },
           "sound": "chair"
         },
         {
-          "title": "不叫名字的背影",
-          "whisper": "祂站在走廊底，從不回頭。",
-          "title_en": "The Back That Never Calls You",
-          "whisper_en": "He stands at the end, never turning.",
+          "title": "排名紙散滿一地",
+          "whisper": "考卷堆到天花板了。",
+          "title_en": "Ranking Papers Scattered Everywhere",
+          "whisper_en": "The exam papers are stacked to the ceiling.",
           "edits": {
-            "corridor": "Edit the existing corridor photo: add a dark out-of-focus adult silhouette far away at the very end of the corridor with its back turned to the camera, standing before a window showing a large banyan tree canopy outside, no face, no other people.",
-            "door": "",
-            "classroom": "Edit the existing classroom photo: drape a dark adult teacher coat over the lectern and turn every student chair in the room to face directly at the camera, empty room with no people, no faces, no readable text."
+            "corridor": "On the corridor bulletin board on the right, make many blank white ranking sheets without text slip, curl and fall off, lying scattered across the shiny corridor floor below the board.",
+            "door": "Inside the classroom seen through the green door, stack tall piles of blank textless exam papers without readable text on top of the wooden student desks up toward the ceiling.",
+            "classroom": "Stack blank textless exam papers to the ceiling on the wooden teacher desk under the green chalkboard, and in the dark open doorway on the right far away add a dark adult silhouette with its back turned wearing a beige cardigan, no face visible."
           },
-          "edit": "Edit the existing corridor photo: add a dark out-of-focus adult silhouette far away at the very end of the corridor with its back turned to the camera, standing before a window showing a large banyan tree canopy outside, no face, no other people.",
-          "sound": "speaker"
-        },
-        {
-          "title": "午睡時的全班",
-          "whisper": "趴好的影子，沒有人。",
-          "title_en": "The Whole Class at Nap Time",
-          "whisper_en": "Shadows lying down, with no one there.",
-          "edits": {
-            "corridor": "Edit the existing corridor photo: cover the floor with long dark shadows of a whole class of standing students with nobody casting them, empty corridor with no people, no faces.",
-            "door": "Edit the existing door photo: pile tall stacks of blank off-white test papers with red pen marks and no readable text, no letters, no numbers up to the ceiling on both sides of the doorway, narrowing the entrance, no people.",
-            "classroom": "Edit the existing classroom photo: cast overlapping dark shadows of a full class sitting at desks across the floor and desks with nobody casting them, and pile tall stacks of blank test papers with red pen marks and no readable text on every desk, no people, no faces, no readable words."
-          },
-          "edit": "Edit the existing corridor photo: cover the floor with long dark shadows of a whole class of standing students with nobody casting them, empty corridor with no people, no faces.",
           "sound": "papers"
         }
       ],
-      "picked": 2
+      "picked": 1
     }
   ],
-  "final": {
-    "card": {
-      "title": "又變小了",
-      "whisper": "課桌本來就這麼高。",
-      "title_en": "Small again",
-      "whisper_en": "The desks were always this tall.",
-      "edit": "Lower the camera to just above the floor, about 10 cm high, so the desks, doors and walls tower overhead.",
-      "sound": "bell"
-    }
-  },
   "ending": {
-    "daylight": "photos/671c2496bc56.webp",
-    "first": "photos/6aa205205796.jpg",
-    "last": "photos/31e19eaa7d91.webp",
+    "daylight": "photos/d5b1e79da610.webp",
+    "first": "photos/127a13646e23.jpg",
+    "last": "photos/09ad3a7d82c6.webp",
+    "year": 2008,
     "memories": [
       "走廊盡頭有一棵大榕樹",
       "從來不叫我名字的導師",
       "貼在布告欄上的月考排名"
     ],
     "memories_en": [
-      "There was a big banyan tree at the end of the corridor",
-      "My homeroom teacher never called me by my name",
-      "The monthly exam rankings posted on the bulletin board"
+      "A big banyan tree right past the end of the corridor",
+      "A homeroom teacher who never called me by name",
+      "The monthly exam rankings pinned on the bulletin board"
     ],
     "changes": [
-      "紅水桶站錯地方",
-      "排名貼滿了牆",
-      "午睡時的全班",
-      "又變小了"
+      "燈暗了走廊變長",
+      "空名牌掉在門下"
     ],
     "changes_en": [
-      "The Red Bucket Stands Wrong",
-      "Rankings Cover the Walls",
-      "The Whole Class at Nap Time",
-      "Small again"
+      "The Light Went Out and the Corridor Lengthened",
+      "The Empty Name Tag Fell Down"
     ],
-    "comment": "一個人回來，我看見了。小小的你很努力，桶歪了也好，名次遮不住你。",
-    "comment_en": "You came back alone, I saw you. Little you tried so hard. The bucket's crooked, that's fine — rankings can't cover you."
+    "comment": "走廊長了燈暗了，空名牌掉了，榕樹還在。別管排名了，孩子，老師看見你了。",
+    "comment_en": "The corridor grew long and dim, the empty tag fell, yet the banyan remains. Forget the rankings, child, I see you now."
   }
 }

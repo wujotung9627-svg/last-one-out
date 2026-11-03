@@ -599,7 +599,7 @@ function placeMarks(scene) {
     const size = Math.max(8, Math.min(paper.h * h * 0.16, (paper.w * stageSize().w * 0.6) / Math.max(4, [...name].length + 3)));
     const score = scores[i];
     const subject = state.lang === 'zh' ? score.subject : score.subject_en;
-    mark.append(el('span', `${subject}　${name}`, 'paper-name'), el('span', String(score.score), 'paper-score'));
+    mark.append(el('span', `${subject}${state.lang === 'zh' ? '　' : '  '}${name}`, 'paper-name'), el('span', String(score.score), 'paper-score'));
     mark.style.fontSize = `${size}px`;
     layer.append(mark);
   });
@@ -1219,7 +1219,7 @@ function bookDate() {
 }
 
 function renderBook() {
-  return drawContactBook($('#book'), { ...state.ending, name: state.name, date: bookDate(), lang: state.lang }, $('#hide-name').checked);
+  return drawContactBook($('#book'), { ...state.ending, scores: state.bible?.scores, name: state.name, date: bookDate(), lang: state.lang }, $('#hide-name').checked);
 }
 
 function finish() {

@@ -107,6 +107,7 @@ export function createAudio() {
   // One footstep on terrazzo in hard school shoes: the heel lands (a low thud and a
   // sharp click), the sole rolls (a soft scuff), the toe lifts (a small tick).
   function step(at, from = null, level = 1) {
+    if (stepSample(at, from, level)) return; // the recorded footsteps, when loaded
     const out = from ? placed(from.x, -1.4, from.z) : ctx.createGain();
     if (!from) {
       out.connect(master);
@@ -604,7 +605,176 @@ export function createAudio() {
     }
   }
 
+  // ---------- recorded sounds (CC0, listed in sounds/SOURCES.md) ----------
+  // Every recorded sound has a synthesised fallback above, used until (or unless)
+  // the file loads.
+
+  const samples = {};
+  let stepSlices = [];
+  let quickSlices = [];
+
+  async function loadSample(name, file) {
+    try {
+      const res = await fetch(`sounds/${file}`);
+      if (res.ok) samples[name] = await ctx.decodeAudioData(await res.arrayBuffer());
+    } catch {
+      // keep the synthesised version
+    }
+  }
+
+  // Finds each footstep in a recording: the moments the loudness jumps.
+  function onsets(buffer, { minGap = 0.28, threshold = 2.2 } = {}) {
+    const data = buffer.getChannelData(0);
+    const hop = Math.floor(buffer.sampleRate * 0.01);
+    const energy = [];
+    for (let i = 0; i + hop < data.length; i += hop) {
+      let sum = 0;
+      for (let j = i; j < i + hop; j++) sum += data[j] * data[j];
+      energy.push(Math.sqrt(sum / hop));
+    }
+    const mean = energy.reduce((a, b) => a + b, 0) / Math.max(1, energy.length);
+    const found = [];
+    let last = -Infinity;
+    for (let k = 1; k < energy.length; k++) {
+      const t = k * 0.01;
+      if (energy[k] > mean * threshold && energy[k] > energy[k - 1] * 1.5 && t - last > minGap) {
+        found.push(Math.max(0, t - 0.015));
+        last = t;
+      }
+    }
+    return found;
+  }
+
+  const ready = Promise.all([
+    loadSample('steps', 'footsteps-tile.mp3'),
+    loadSample('quick', 'steps-quick.mp3'),
+    loadSample('laugh', 'children-laughing.mp3'),
+    loadSample('recess', 'recess.mp3'),
+    loadSample('hushed', 'hushed.mp3'),
+    loadSample('slide', 'sliding-door.mp3'),
+    loadSample('slam', 'sliding-door-slam.mp3'),
+    loadSample('rattle', 'door-rattle.mp3'),
+    loadSample('squeak', 'door-squeak.mp3'),
+    loadSample('chair', 'wooden-chair.mp3'),
+    loadSample('chimes', 'chimes.mp3'),
+  ]).then(() => {
+    if (samples.steps) stepSlices = onsets(samples.steps);
+    if (samples.quick) quickSlices = onsets(samples.quick, { minGap: 0.14 });
+  });
+
+  // Plays (part of) a recording. `into` sends it through a node the caller made
+  // (a moving panner, a wall filter); `pos` places it in space; otherwise it plays
+  // straight, with some of the corridor's reverb.
+  function playSample(name, { at = ctx.currentTime + 0.02, offset = 0, duration, gain = 1, rate = 1, pos = null, into = null, filter = null } = {}) {
+    const buffer = samples[name];
+    if (!buffer) return false;
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.playbackRate.value = rate;
+    const level = ctx.createGain();
+    level.gain.value = gain;
+    source.connect(level);
+    let out = level;
+    if (filter) {
+      const f = ctx.createBiquadFilter();
+      f.type = filter.type;
+      f.frequency.value = filter.freq;
+      f.Q.value = filter.q ?? 0.8;
+      level.connect(f);
+      out = f;
+    }
+    if (into) out.connect(into);
+    else if (pos) out.connect(placed(pos.x, pos.y, pos.z));
+    else {
+      out.connect(master);
+      out.connect(reverb);
+    }
+    const safeOffset = Math.min(Math.max(0, offset), Math.max(0, buffer.duration - 0.05));
+    source.start(at, safeOffset, duration);
+    return true;
+  }
+
+  const randomOffset = (name, length) => Math.random() * Math.max(0, (samples[name]?.duration ?? 0) - length);
+
+  function stepSample(at, from, level) {
+    if (!stepSlices.length) return false;
+    const offset = stepSlices[Math.floor(Math.random() * stepSlices.length)];
+    return playSample('steps', {
+      at,
+      offset,
+      duration: 0.42,
+      gain: 1.1 * level,
+      rate: 0.94 + Math.random() * 0.1,
+      pos: from ? { x: from.x, y: -1.4, z: from.z } : null,
+    });
+  }
+
+  // A heavy hit for a jump scare: a door slamming, a low boom, and a dissonant shriek.
+  // A whole class slaps its desks at once: thirty-odd palms on wood within a few
+  // milliseconds of each other, spread across the room in front of you.
+  function deskSlap() {
+    const at = ctx.currentTime + 0.02;
+    for (let i = 0; i < 34; i++) {
+      const t0 = at + Math.random() * 0.03;
+      const out = placed((Math.random() - 0.5) * 7, -0.6, -1 - Math.random() * 5);
+      burst(t0, { type: 'bandpass', freq: 1400 + Math.random() * 1600, q: 0.9, peak: 0.16, decay: 0.07, out });
+      const body = ctx.createOscillator();
+      body.frequency.setValueAtTime(150 + Math.random() * 90, t0);
+      body.frequency.exponentialRampToValueAtTime(70, t0 + 0.12);
+      const env = ctx.createGain();
+      env.gain.setValueAtTime(0.0001, t0);
+      env.gain.linearRampToValueAtTime(0.11, t0 + 0.004);
+      env.gain.exponentialRampToValueAtTime(0.0005, t0 + 0.18);
+      body.connect(env);
+      env.connect(out);
+      body.start(t0);
+      body.stop(t0 + 0.2);
+    }
+    const thump = ctx.createOscillator(); // the floor answers
+    thump.frequency.setValueAtTime(58, at);
+    thump.frequency.exponentialRampToValueAtTime(34, at + 0.35);
+    const thumpEnv = ctx.createGain();
+    thumpEnv.gain.setValueAtTime(0.7, at);
+    thumpEnv.gain.exponentialRampToValueAtTime(0.0005, at + 0.5);
+    thump.connect(thumpEnv);
+    thumpEnv.connect(master);
+    thump.start(at);
+    thump.stop(at + 0.55);
+  }
+
+  function stinger() {
+    const at = ctx.currentTime + 0.01;
+    playSample('slam', { at, gain: 1.4 });
+    const boom = ctx.createOscillator();
+    boom.frequency.setValueAtTime(70, at);
+    boom.frequency.exponentialRampToValueAtTime(32, at + 0.9);
+    const boomEnv = ctx.createGain();
+    boomEnv.gain.setValueAtTime(0.9, at);
+    boomEnv.gain.exponentialRampToValueAtTime(0.0005, at + 1.4);
+    boom.connect(boomEnv);
+    boomEnv.connect(master);
+    boom.start(at);
+    boom.stop(at + 1.5);
+    for (const frequency of [466, 494, 523, 1046]) {
+      const shriek = ctx.createOscillator();
+      shriek.type = 'sawtooth';
+      shriek.frequency.setValueAtTime(frequency, at);
+      shriek.frequency.linearRampToValueAtTime(frequency * 0.94, at + 1.2);
+      const env = ctx.createGain();
+      env.gain.setValueAtTime(0, at);
+      env.gain.linearRampToValueAtTime(0.05, at + 0.02);
+      env.gain.exponentialRampToValueAtTime(0.0005, at + 1.3);
+      shriek.connect(env);
+      env.connect(master);
+      env.connect(reverb);
+      shriek.start(at);
+      shriek.stop(at + 1.35);
+    }
+    burst(at, { type: 'highpass', freq: 1200, peak: 0.5, decay: 0.4, out: master });
+  }
+
   const resume = () => (ctx.state === 'suspended' ? ctx.resume() : undefined);
+  const far = () => ({ x: (Math.random() < 0.5 ? -1 : 1) * (2 + Math.random() * 3), y: 0.2, z: -3 - Math.random() * 5 });
   const G3 = 196;
   const C4 = 261.63;
   const D4 = 293.66;
@@ -622,6 +792,7 @@ export function createAudio() {
       resume();
       crackle();
     },
+    ready,
     ball() {
       resume();
       ball();
@@ -630,21 +801,57 @@ export function createAudio() {
       resume();
       chalk(seconds);
     },
-    murmur(seconds) {
+    murmur(seconds = 4) {
       resume();
-      murmur(seconds);
+      const played = playSample('recess', { offset: randomOffset('recess', seconds), duration: seconds, gain: 0.55, filter: { type: 'lowpass', freq: 1300 }, pos: far() });
+      if (!played) murmur(seconds);
+    },
+    // Children whispering right behind you.
+    whisper() {
+      resume();
+      playSample('hushed', { offset: randomOffset('hushed', 3), duration: 3, gain: 0.85, pos: { x: Math.random() < 0.5 ? -0.7 : 0.7, y: 0, z: 1.1 } });
+    },
+    slam() {
+      resume();
+      playSample('slam', { gain: 1.2 });
+    },
+    // A locked door: the handle rattles and it will not open.
+    rattle() {
+      resume();
+      if (!playSample('rattle', { duration: 1.6, gain: 0.9, pos: { x: 0.8, y: 0, z: -1.2 } })) burst(ctx.currentTime, { freq: 900, q: 2, peak: 0.3, decay: 0.3, out: master });
+    },
+    stinger() {
+      resume();
+      stinger();
+    },
+    slap() {
+      resume();
+      deskSlap();
     },
     slideDoor() {
       resume();
-      slideDoor();
+      if (!playSample('slide', { gain: 1, pos: { x: 0.6, y: 0, z: -1.4 } })) slideDoor();
     },
     giggle() {
       resume();
-      giggle();
+      const played = playSample('laugh', { offset: randomOffset('laugh', 3.5), duration: 2.4 + Math.random(), gain: 0.6, filter: { type: 'lowpass', freq: 2800 }, pos: far() });
+      if (!played) giggle();
     },
     runPast() {
       resume();
-      runPast();
+      if (!quickSlices.length) return runPast();
+      const start = ctx.currentTime + 0.05;
+      const side = Math.random() < 0.5 ? -1 : 1;
+      const out = placed(side * -5, -1.4, 1.5);
+      out.positionX.setValueAtTime(side * -5, start);
+      out.positionX.linearRampToValueAtTime(side * 5, start + 2.2);
+      out.positionZ.setValueAtTime(1.5, start);
+      out.positionZ.linearRampToValueAtTime(-2.5, start + 2.2);
+      for (let i = 0; i < 9; i++) {
+        const offset = quickSlices[Math.floor(Math.random() * quickSlices.length)];
+        playSample('quick', { at: start + i * 0.22, offset, duration: 0.2, gain: 0.9, rate: 1.1 + Math.random() * 0.1, into: out });
+      }
+      setTimeout(() => playSample('laugh', { offset: randomOffset('laugh', 2), duration: 1.6, gain: 0.5, filter: { type: 'lowpass', freq: 2600 }, pos: far() }), 2400);
     },
     // outdoors: 'open' in the open-air corridor, 'inside' in the classroom, 'off' elsewhere.
     night(where) {
@@ -659,7 +866,7 @@ export function createAudio() {
     },
     creak() {
       resume();
-      creak();
+      if (!playSample('squeak', { duration: 2.2, gain: 0.9, pos: { x: 1.2, y: 0, z: -1 } })) creak();
     },
     drip() {
       resume();
@@ -667,15 +874,19 @@ export function createAudio() {
     },
     chair() {
       resume();
-      chair();
+      const played = playSample('chair', { offset: randomOffset('chair', 1.6), duration: 1.6, gain: 0.9, pos: { x: (Math.random() - 0.5) * 6, y: -1, z: -3 } });
+      if (!played) chair();
     },
     papers() {
       resume();
       papers();
     },
+    // The school speaker's chime before an announcement.
     speaker() {
       resume();
-      speaker();
+      const played = playSample('chimes', { duration: 3.2, gain: 0.8, filter: { type: 'bandpass', freq: 1800, q: 0.6 }, pos: { x: 0, y: 2.5, z: -2 } });
+      if (!played) speaker();
+      else burst(ctx.currentTime, { freq: 2000, q: 0.7, peak: 0.04, decay: 3.5, out: master, attack: 0.2 }); // speaker hiss
     },
     // Two strokes of a felt eraser on a chalkboard.
     erase() {

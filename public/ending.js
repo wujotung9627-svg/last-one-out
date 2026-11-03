@@ -330,10 +330,11 @@ export async function drawContactBook(canvas, book, hideName) {
   box(c, 450, split + head, 190, bottom - split - head);
   stamp(c, 545, split + head + (bottom - split - head) / 2, f.seen);
 
-  // Exam results, left blank; the two photos are taped over them.
+  // Exam results: the three you saw on the office desk, in red; the photos are taped below.
   box(c, 60, top, 390, head);
   printed(c, f.scores, 255, top + head / 2);
-  const subjects = f.subjects;
+  const scored = (book.scores ?? []).map((s) => ({ subject: english ? s.subject_en : s.subject, score: s.score }));
+  const subjects = [...scored.map((s) => s.subject), ...f.subjects.filter((name) => !scored.some((s) => s.subject === name))].slice(0, f.subjects.length);
   const rowH = (split - top - head) / (subjects.length + 1);
   box(c, 60, top + head, 390, split - top - head);
   printed(c, f.subject, 155, top + head + rowH / 2, 18);
@@ -347,6 +348,23 @@ export async function drawContactBook(canvas, book, hideName) {
     c.lineTo(450, y);
     c.stroke();
     printed(c, subject, 155, y + rowH / 2, 18);
+    const mark = scored[i];
+    if (mark) {
+      c.save();
+      c.translate(355, y + rowH / 2);
+      c.rotate(-0.06 + rand() * 0.04);
+      c.fillStyle = RED;
+      c.strokeStyle = RED;
+      c.font = `600 34px ${HAND_EN}`;
+      c.textAlign = 'center';
+      c.textBaseline = 'middle';
+      c.fillText(String(mark.score), 0, 0);
+      c.lineWidth = 2;
+      c.beginPath();
+      c.ellipse(0, 0, 34, 20, 0, 0, Math.PI * 2);
+      c.stroke();
+      c.restore();
+    }
   });
   c.beginPath();
   c.moveTo(260, top + head);
@@ -357,6 +375,7 @@ export async function drawContactBook(canvas, book, hideName) {
   box(c, 60, split + head, 390, bottom - split - head); // nobody signed
 
   const [first, last] = await Promise.all([loadImage(book.first), loadImage(book.last)]);
-  tapedPhoto(c, first, 92, 250, 300, 200, -0.05, f.then, english);
-  tapedPhoto(c, last, 120, 520, 300, 200, 0.04, f.now, english);
+  const below = scored.length ? top + head + rowH * (scored.length + 1) + 12 : 250;
+  tapedPhoto(c, first, 92, below, 300, 200, -0.05, f.then, english);
+  tapedPhoto(c, last, 120, Math.min(below + 140, split - 250), 300, 200, 0.04, f.now, english);
 }
