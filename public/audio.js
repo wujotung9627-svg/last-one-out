@@ -61,7 +61,7 @@ export function createAudio() {
 
   const noise = noiseBuffer(ctx, 1);
 
-  function step(at, soft) {
+  function step(at, soft, from = null, level = 1) {
     const source = ctx.createBufferSource();
     source.buffer = noise;
     const band = ctx.createBiquadFilter();
@@ -70,13 +70,44 @@ export function createAudio() {
     band.Q.value = soft ? 0.7 : 1.3;
     const env = ctx.createGain();
     env.gain.setValueAtTime(0, at);
-    env.gain.linearRampToValueAtTime(soft ? 0.25 : 0.6, at + 0.005);
+    env.gain.linearRampToValueAtTime((soft ? 0.25 : 0.6) * level, at + 0.005);
     env.gain.exponentialRampToValueAtTime(0.001, at + (soft ? 0.25 : 0.09));
     source.connect(band);
     band.connect(env);
-    env.connect(master);
-    env.connect(reverb);
+    let out = env;
+    if (from) {
+      // Placed in space: with headphones it is clearly behind you.
+      const panner = ctx.createPanner();
+      panner.panningModel = 'HRTF';
+      panner.distanceModel = 'inverse';
+      panner.positionX.value = from.x;
+      panner.positionY.value = 0;
+      panner.positionZ.value = from.z;
+      env.connect(panner);
+      out = panner;
+    }
+    out.connect(master);
+    out.connect(reverb);
     source.start(at, Math.random() * 0.6, 0.3);
+  }
+
+  // A short electrical crackle and dip in the hum, for a flickering tube.
+  function crackle() {
+    const at = ctx.currentTime + 0.01;
+    const source = ctx.createBufferSource();
+    source.buffer = noise;
+    const high = ctx.createBiquadFilter();
+    high.type = 'highpass';
+    high.frequency.value = 2500;
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0.06, at);
+    env.gain.exponentialRampToValueAtTime(0.001, at + 0.18);
+    source.connect(high);
+    high.connect(env);
+    env.connect(master);
+    source.start(at, Math.random() * 0.6, 0.2);
+    hum.gain.setValueAtTime(0.01, at);
+    hum.gain.linearRampToValueAtTime(0.035, at + 0.3);
   }
 
   function chime(at, frequency) {
@@ -108,10 +139,16 @@ export function createAudio() {
   const E4 = 329.63;
 
   return {
-    footsteps(count = 3, soft = false) {
+    // follow: after you stop, one more step sounds somewhere behind you.
+    footsteps(count = 3, follow = false) {
       resume();
       const start = ctx.currentTime + 0.05;
-      for (let i = 0; i < count; i++) step(start + i * 0.42 + Math.random() * 0.04, soft);
+      for (let i = 0; i < count; i++) step(start + i * 0.42 + Math.random() * 0.04, false);
+      if (follow) step(start + count * 0.42 + 0.55, false, { x: (Math.random() - 0.5) * 1.2, z: 2.4 }, 0.7);
+    },
+    flicker() {
+      resume();
+      crackle();
     },
     // The school bell: two phrases of the Westminster quarters.
     bell() {

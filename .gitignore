@@ -1,5 +1,6 @@
 node_modules/
 .env
 .spend.json
-photos/
+/photos/
+runs/
 .DS_Store

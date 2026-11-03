@@ -11,6 +11,7 @@ import { MOCK_BOXES, MOCK_COMMENT, MOCK_DEALS, mockPhoto } from './mock.mjs';
 const ROOT = fileURLToPath(new URL('.', import.meta.url));
 const PUBLIC = join(ROOT, 'public');
 const PHOTOS_DIR = join(ROOT, 'photos');
+const RUNS_DIR = join(ROOT, 'runs');
 const SPEND_FILE = join(ROOT, '.spend.json');
 
 const PORT = Number(process.env.PORT || 4310);
@@ -536,6 +537,7 @@ const routes = {
       ending: null,
       dealing: null,
       busy: false,
+      record: { walks: [], draws: [], final: null }, // replayed later without any model calls
     };
     schools.set(school.id, school);
     if (schools.size > 200) schools.delete(schools.keys().next().value);
@@ -552,7 +554,9 @@ const routes = {
         );
         for (const scene of SCENES) school.details[scene.id] = cleanText(details?.[scene.id], 400);
       }
-      return { schoolId: school.id, lang: school.lang, draws: DRAWS, walk: await firstWalk(school) };
+      const walk = await firstWalk(school);
+      school.record.walks.push(walk);
+      return { schoolId: school.id, lang: school.lang, draws: DRAWS, walk };
     });
   },
 
@@ -571,9 +575,12 @@ const routes = {
     if (school.changes.length >= DRAWS) throw new HttpError(409, 'No cards left. Walk on.');
     return exclusive(school, async () => {
       const cards = await dealFor(school);
-      const walk = await changedWalk(school, cards[index]);
+      const changed = await changedWalk(school, cards[index]);
       school.dealing = null;
-      return { cards, picked: index, walk: commit(school, cards[index], walk), lastDraw: school.changes.length >= DRAWS };
+      const walk = commit(school, cards[index], changed);
+      school.record.draws.push({ cards, picked: index });
+      school.record.walks.push(walk);
+      return { cards, picked: index, walk, lastDraw: school.changes.length >= DRAWS };
     });
   },
 
@@ -583,9 +590,11 @@ const routes = {
     if (school.final) throw new HttpError(409, 'This was already the last walk.');
     return exclusive(school, async () => {
       const card = FINAL_CARD[school.lang];
-      const walk = await changedWalk(school, card);
+      const walk = commit(school, card, await changedWalk(school, card));
       school.final = true;
-      return { card, walk: commit(school, card, walk) };
+      school.record.final = { card };
+      school.record.walks.push(walk);
+      return { card, walk };
     });
   },
 
@@ -608,11 +617,46 @@ const routes = {
           changes: school.changes.map((c) => c.title),
           comment,
         };
+        await saveRun(school).catch((err) => console.error(`[run] not saved: ${err.message}`));
       }
       return school.ending;
     });
   },
 };
+
+// Saves a finished walk with its photos to runs/<id>/, so scripts/build-demo.mjs can
+// publish a replay that needs no model calls. The player's name is never part of it.
+async function saveRun(school) {
+  const dir = join(RUNS_DIR, school.id);
+  const photoDir = join(dir, 'photos');
+  await mkdir(photoDir, { recursive: true });
+  const local = async (url) => {
+    if (!url) return url;
+    const { bytes, mime } = await readPhoto(url.slice('/photos/'.length));
+    const name = `${url.slice('/photos/'.length)}.${EXT[mime]}`;
+    await writeFile(join(photoDir, name), bytes);
+    return `photos/${name}`;
+  };
+  const walks = await Promise.all(
+    school.record.walks.map(async (walk) => ({
+      index: walk.index,
+      scenes: await Promise.all(
+        walk.scenes.map(async (scene) => ({ ...scene, photo: await local(scene.photo), depth: await local(scene.depth) })),
+      ),
+    })),
+  );
+  const e = school.ending;
+  const run = {
+    lang: school.lang,
+    memories: school.memories,
+    walks,
+    draws: school.record.draws,
+    final: school.record.final,
+    ending: { ...e, daylight: await local(e.daylight), first: await local(e.first), last: await local(e.last) },
+  };
+  await writeFile(join(dir, 'run.json'), JSON.stringify(run, null, 2));
+  console.log(`[run] saved runs/${school.id}`);
+}
 
 // ---------- http ----------
 

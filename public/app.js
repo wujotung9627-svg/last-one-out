@@ -104,7 +104,58 @@ function showError(message) {
   $('#error').hidden = !message;
 }
 
+// ---------- replay: a recorded walk that needs no server and no model calls ----------
+
+const REPLAY_SRC = document.querySelector('meta[name="last-one-out-replay"]')?.content;
+let replayRun = null;
+let replayCursor = 0;
+
+const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function loadReplay() {
+  replayRun ??= await fetch(REPLAY_SRC).then((res) => {
+    if (!res.ok) throw new Error('The recorded walk could not be loaded.');
+    return res.json();
+  });
+  return replayRun;
+}
+
+// Puts the recorded card where the player clicked and the other two around it.
+function arrange(cards, picked, clicked) {
+  const others = cards.filter((_, i) => i !== picked);
+  return [0, 1, 2].map((i) => (i === clicked ? cards[picked] : others.shift()));
+}
+
+async function replayApi(path, body) {
+  const run = await loadReplay();
+  switch (path) {
+    case '/api/status':
+      return { replay: true };
+    case '/api/school':
+      replayCursor = 0;
+      await pause(1200);
+      return { schoolId: 'replay', lang: run.lang, draws: run.draws.length, walk: run.walks[0] };
+    case '/api/deal':
+      return { ready: true };
+    case '/api/draw': {
+      const draw = run.draws[replayCursor];
+      replayCursor += 1;
+      await pause(1500);
+      return { cards: arrange(draw.cards, draw.picked, body.index), picked: body.index, walk: run.walks[replayCursor] };
+    }
+    case '/api/final':
+      await pause(1200);
+      return { card: run.final.card, walk: run.walks[run.walks.length - 1] };
+    case '/api/ending':
+      await pause(1200);
+      return run.ending;
+    default:
+      throw new Error('Not available in the replay.');
+  }
+}
+
 async function api(path, body) {
+  if (REPLAY_SRC) return replayApi(path, body);
   const res = await fetch(
     path,
     body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : undefined,
@@ -115,6 +166,7 @@ async function api(path, body) {
 }
 
 async function refreshStatus() {
+  if (REPLAY_SRC) return;
   try {
     const s = await api('/api/status');
     $('#mode').hidden = !s.mock;
@@ -199,14 +251,44 @@ function render(scene) {
   placeName(scene);
 }
 
+// From the third walk on, sometimes one more footstep follows yours.
+const followed = () => state.walk.index >= 2 && Math.random() < 0.5;
+
+// Now and then a tube flickers: the picture dips and the hum crackles. More often later.
+let flickerTimer = null;
+
+function scheduleFlicker() {
+  clearTimeout(flickerTimer);
+  const waitMs = (6000 + Math.random() * 9000) / (1 + (state.walk?.index ?? 0) * 0.5);
+  flickerTimer = setTimeout(() => {
+    if (!$('#walk-screen').hidden && !state.busy) {
+      state.audio?.flicker();
+      if (!REDUCED_MOTION) {
+        $('#stage').animate(
+          [
+            { filter: 'brightness(1)' },
+            { filter: 'brightness(0.5)', offset: 0.2 },
+            { filter: 'brightness(1)', offset: 0.45 },
+            { filter: 'brightness(0.7)', offset: 0.6 },
+            { filter: 'brightness(1)' },
+          ],
+          { duration: 320 },
+        );
+      }
+    }
+    if (!$('#walk-screen').hidden) scheduleFlicker();
+  }, waitMs);
+}
+
 async function stepInto(scene) {
   const photo = $('#photo');
   const next = $('#photo-next');
   $('#hotspots').replaceChildren();
   $('#board-name').hidden = true;
+  const follow = followed();
   if (walker) {
     const from = currentScene();
-    state.audio?.footsteps(3);
+    state.audio?.footsteps(3, follow);
     const walked = await walk3d(async () => {
       await walker.walk(from, scene, WALK_MS);
       photo.src = scene.photo; // swap under the canvas so nothing flashes
@@ -219,7 +301,7 @@ async function stepInto(scene) {
   }
   next.src = scene.photo;
   await next.decode().catch(() => {});
-  state.audio?.footsteps(3);
+  if (!walker) state.audio?.footsteps(3, follow);
   const leave = REDUCED_MOTION
     ? [{ opacity: 1 }, { opacity: 0 }]
     : [
@@ -256,6 +338,7 @@ async function beginWalk(walk, line, sound) {
     photo.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 1400, easing: 'ease-out' });
   }
   render(walk.scenes[0]);
+  scheduleFlicker();
 }
 
 async function advance() {
@@ -399,4 +482,19 @@ window.addEventListener('resize', () => {
   if (state.walk && !$('#walk-screen').hidden) placeName(currentScene());
 });
 
-refreshStatus();
+// In the replay the memories are the recorded ones; only the name is the player's own.
+async function prepareReplay() {
+  try {
+    const run = await loadReplay();
+    ['#m1', '#m2', '#m3'].forEach((id, i) => {
+      $(id).value = run.memories[i] ?? '';
+      $(id).readOnly = true;
+    });
+    $('#budget').textContent = 'This page replays one recorded walk, so it makes no AI calls. Your name still stays in your browser.';
+  } catch (err) {
+    showError(err.message);
+  }
+}
+
+if (REPLAY_SRC) prepareReplay();
+else refreshStatus();
