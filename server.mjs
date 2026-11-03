@@ -111,16 +111,28 @@ const stopIfCancelled = () => {
   if (job.getStore()?.cancelled) throw new Cancelled('cancelled');
 };
 
+// A call that hangs is abandoned and tried once more rather than holding up the walk.
+const CALL_TIMEOUT_MS = Number(process.env.CALL_TIMEOUT_MS || 100_000);
+
 async function callModel(path, body, attempt = 0) {
   stopIfCancelled();
   assertBudget();
-  const res = await fetch(`${API_BASE}${path}`, {
-    method: 'POST',
-    headers: { ...authHeader(), 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-    redirect: 'error',
-    signal: AbortSignal.timeout(240_000),
-  });
+  let res;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      method: 'POST',
+      headers: { ...authHeader(), 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      redirect: 'error',
+      signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
+    });
+  } catch (err) {
+    if (err?.name === 'TimeoutError' && attempt < 1) {
+      console.error(`[model] ${path} ${body.model} -> no answer in ${CALL_TIMEOUT_MS / 1000} s, trying again`);
+      return callModel(path, body, attempt + 1);
+    }
+    throw err;
+  }
   const data = await res.json().catch(() => null);
   if ((res.status === 429 || res.status >= 500) && attempt < 2) {
     console.error(`[model] ${path} ${body.model} -> HTTP ${res.status}, retrying`);
@@ -529,6 +541,25 @@ async function firstAcceptedEdit(photoId, prompts) {
   return null;
 }
 
+// Tries the edits at the same time and keeps the most preferred one that was accepted:
+// a refusal takes as long as a success, so trying them one by one doubles the wait.
+async function preferredEdit(photoId, prompts) {
+  const { bytes } = await readPhoto(photoId);
+  const results = await Promise.all(
+    prompts.map((prompt) =>
+      editImage(bytes, prompt).then(
+        (out) => ({ out }),
+        (err) => {
+          if (!refused(err)) throw err;
+          return null;
+        },
+      ),
+    ),
+  );
+  const first = results.find(Boolean);
+  return first ? savePhoto(first.out) : null;
+}
+
 // ---------- a remembered school ----------
 
 const schools = new Map(); // id -> school
@@ -633,7 +664,7 @@ async function softenEdit(edit) {
 
 // Edits one scene's photo: refused -> rewritten and retried; not visible -> pushed once
 // more; still refused -> null, and the photo stays as it was.
-async function editScene(id, previous, instruction) {
+async function editScene(id, previous, instruction, fallback) {
   const { bytes } = await readPhoto(previous);
   let used = instruction;
   let photoId;
@@ -647,6 +678,10 @@ async function editScene(id, previous, instruction) {
       photoId = await savePhoto(await editImage(bytes, editPrompt(used)));
     } catch (again) {
       if (again.status === 402) throw again;
+      if (fallback && fallback !== instruction) {
+        console.error(`[edit] ${id}: refused twice, trying only the shirts`);
+        return firstAcceptedEdit(previous, [editPrompt(fallback)]);
+      }
       console.error(`[edit] ${id}: refused twice, keeping the previous photo`);
       return null;
     }
@@ -807,7 +842,7 @@ async function crowdFrames(classroomId) {
   }
   try {
     const seated = await firstAcceptedEdit(classroomId, [CROWD_SEATED]);
-    const turned = seated && (await firstAcceptedEdit(seated, CROWD_TURNED));
+    const turned = seated && (await preferredEdit(seated, CROWD_TURNED));
     if (seated && turned) return { seated: `/photos/${seated}`, turned: `/photos/${turned}` };
     const dark = await firstAcceptedEdit(classroomId, LIGHTS_OUT);
     return { seated: null, turned: dark && `/photos/${dark}` };
@@ -836,7 +871,8 @@ async function renderOption(school, loop, card) {
       else if (!previous) photoId = await takePhoto(id, school, [card.edits[id], TRACES[loop]?.[id]].filter(Boolean).join(' ')); // first time in this room
       else {
         const instruction = [card.edits[id], TRACES[loop]?.[id], last && id === 'classroom' ? FINAL_CLASSROOM : ''].filter(Boolean).join(' ');
-        if (instruction) photoId = (await editScene(id, previous, instruction)) ?? previous;
+        const fallback = [TRACES[loop]?.[id], last && id === 'classroom' ? FINAL_CLASSROOM.replace(/^Also /, '') : ''].filter(Boolean).join(' ');
+        if (instruction) photoId = (await editScene(id, previous, instruction, fallback)) ?? previous;
       }
       photoIds[id] = photoId;
       if (id === 'corridor') flicker = quiet(flickerFrame(photoId, loop));
