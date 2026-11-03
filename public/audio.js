@@ -352,6 +352,180 @@ export function createAudio() {
     });
   }
 
+  // A child's voice: glottal pulses (a sawtooth at a child's pitch) through two mouth
+  // formants. Used for giggles; kept far away and muffled, never clear.
+  function childVoice(at, length, pitch, out, level) {
+    const glottis = ctx.createOscillator();
+    glottis.type = 'sawtooth';
+    glottis.frequency.setValueAtTime(pitch * 1.08, at);
+    glottis.frequency.exponentialRampToValueAtTime(pitch * 0.92, at + length);
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0, at);
+    env.gain.linearRampToValueAtTime(level, at + length * 0.25);
+    env.gain.exponentialRampToValueAtTime(0.0005, at + length);
+    for (const [frequency, q, gain] of [
+      [850, 6, 1],
+      [1900, 8, 0.6],
+    ]) {
+      const formant = ctx.createBiquadFilter();
+      formant.type = 'bandpass';
+      formant.frequency.value = frequency * (0.95 + Math.random() * 0.1);
+      formant.Q.value = q;
+      const g = ctx.createGain();
+      g.gain.value = gain;
+      glottis.connect(formant);
+      formant.connect(g);
+      g.connect(env);
+    }
+    env.connect(out);
+    glottis.start(at);
+    glottis.stop(at + length + 0.05);
+    burst(at, { freq: 3000, q: 1, peak: level * 0.15, decay: length, out, attack: length * 0.3 }); // breath
+  }
+
+  // A giggle somewhere out of sight: a few quick "hee-hee" pulses, sometimes two children.
+  function giggle() {
+    const start = ctx.currentTime + 0.05;
+    const side = Math.random() < 0.5 ? -1 : 1;
+    const wall = ctx.createBiquadFilter();
+    wall.type = 'lowpass';
+    wall.frequency.value = 2200;
+    const out = placed(side * (2 + Math.random() * 3), 0.2, -3 - Math.random() * 5);
+    wall.connect(out);
+    const voices = Math.random() < 0.5 ? 2 : 1;
+    for (let v = 0; v < voices; v++) {
+      let t = start + v * (0.25 + Math.random() * 0.3);
+      const pitch = 330 + Math.random() * 120;
+      const pulses = 4 + Math.floor(Math.random() * 3);
+      for (let i = 0; i < pulses; i++) {
+        childVoice(t, 0.07 + Math.random() * 0.04, pitch * (1 - i * 0.03), wall, 0.22);
+        t += 0.11 + Math.random() * 0.04;
+      }
+    }
+  }
+
+  // Small feet running past in indoor shoes: quick, soft steps that come from one side
+  // and pass behind you to the other, with a giggle at the end.
+  function runPast() {
+    const start = ctx.currentTime + 0.05;
+    const side = Math.random() < 0.5 ? -1 : 1;
+    const out = placed(side * -5, -1.4, 1.5);
+    out.positionX.setValueAtTime(side * -5, start);
+    out.positionX.linearRampToValueAtTime(side * 5, start + 2.4);
+    out.positionZ.setValueAtTime(1.5, start);
+    out.positionZ.linearRampToValueAtTime(-2.5, start + 2.4);
+    let t = start;
+    for (let i = 0; i < 10; i++) {
+      const v = 0.5 + Math.random() * 0.3;
+      burst(t, { type: 'lowpass', freq: 500, peak: 0.35 * v, decay: 0.06, out });
+      burst(t + 0.01, { freq: 2600, q: 2, peak: 0.12 * v, decay: 0.03, out });
+      if (Math.random() < 0.25) {
+        const squeak = ctx.createOscillator(); // rubber soles on a wet floor
+        squeak.frequency.setValueAtTime(2400 + Math.random() * 600, t + 0.02);
+        const env = ctx.createGain();
+        env.gain.setValueAtTime(0, t + 0.02);
+        env.gain.linearRampToValueAtTime(0.03, t + 0.03);
+        env.gain.exponentialRampToValueAtTime(0.0005, t + 0.09);
+        squeak.connect(env);
+        env.connect(out);
+        squeak.start(t + 0.02);
+        squeak.stop(t + 0.1);
+      }
+      t += 0.2 + Math.random() * 0.06;
+    }
+    setTimeout(giggle, 2600);
+  }
+
+  // A Taiwanese night outside the open corridor: crickets, the odd frog, and now and
+  // then a scooter going past far away. Quieter once you are inside the classroom.
+  const night = ctx.createGain();
+  night.gain.value = 0;
+  night.connect(master);
+  let nightTimer = null;
+
+  function cricket(at, x, z) {
+    const out = placed(x, -1, z);
+    out.disconnect();
+    out.connect(night);
+    for (let p = 0; p < 3; p++) {
+      const t = at + p * 0.035;
+      const chirp = ctx.createOscillator();
+      chirp.frequency.value = 4300 + Math.random() * 300;
+      const env = ctx.createGain();
+      env.gain.setValueAtTime(0, t);
+      env.gain.linearRampToValueAtTime(0.05, t + 0.004);
+      env.gain.exponentialRampToValueAtTime(0.0005, t + 0.022);
+      chirp.connect(env);
+      env.connect(out);
+      chirp.start(t);
+      chirp.stop(t + 0.03);
+    }
+  }
+
+  function frog(at) {
+    const out = placed(-4 + Math.random() * 8, -2, -8);
+    out.disconnect();
+    out.connect(night);
+    for (let k = 0; k < 3; k++) {
+      const t = at + k * 0.28;
+      const croak = ctx.createOscillator();
+      croak.type = 'sawtooth';
+      croak.frequency.setValueAtTime(140, t);
+      croak.frequency.linearRampToValueAtTime(110, t + 0.16);
+      const throat = ctx.createBiquadFilter();
+      throat.type = 'lowpass';
+      throat.frequency.value = 600;
+      const env = ctx.createGain();
+      env.gain.setValueAtTime(0, t);
+      env.gain.linearRampToValueAtTime(0.06, t + 0.03);
+      env.gain.exponentialRampToValueAtTime(0.0005, t + 0.18);
+      croak.connect(throat);
+      throat.connect(env);
+      env.connect(out);
+      croak.start(t);
+      croak.stop(t + 0.2);
+    }
+  }
+
+  function scooter(at) {
+    const out = placed(-30, 0, -40);
+    out.disconnect();
+    out.connect(night);
+    out.positionX.setValueAtTime(-30, at);
+    out.positionX.linearRampToValueAtTime(30, at + 6);
+    const engine = ctx.createOscillator();
+    engine.type = 'sawtooth';
+    engine.frequency.setValueAtTime(70, at);
+    engine.frequency.linearRampToValueAtTime(95, at + 2.5);
+    engine.frequency.linearRampToValueAtTime(75, at + 6);
+    const muffle = ctx.createBiquadFilter();
+    muffle.type = 'lowpass';
+    muffle.frequency.value = 400;
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0, at);
+    env.gain.linearRampToValueAtTime(0.08, at + 2.5);
+    env.gain.linearRampToValueAtTime(0.0005, at + 6);
+    engine.connect(muffle);
+    muffle.connect(env);
+    env.connect(out);
+    engine.start(at);
+    engine.stop(at + 6.1);
+  }
+
+  function nightTick() {
+    const now = ctx.currentTime;
+    const insects = [
+      [-4, -3],
+      [3, -6],
+      [-6, -9],
+    ];
+    for (const [x, z] of insects) {
+      if (Math.random() < 0.7) cricket(now + Math.random() * 0.9, x, z);
+    }
+    if (Math.random() < 0.06) frog(now + Math.random());
+    if (Math.random() < 0.012) scooter(now + 0.2);
+  }
+
   // Children playing somewhere outside, muffled by walls and distance: voice-like
   // formants rising and falling in syllables, never clear enough to be words.
   function murmur(seconds = 4) {
@@ -463,6 +637,25 @@ export function createAudio() {
     slideDoor() {
       resume();
       slideDoor();
+    },
+    giggle() {
+      resume();
+      giggle();
+    },
+    runPast() {
+      resume();
+      runPast();
+    },
+    // outdoors: 'open' in the open-air corridor, 'inside' in the classroom, 'off' elsewhere.
+    night(where) {
+      resume();
+      const level = where === 'open' ? 1 : where === 'inside' ? 0.3 : 0;
+      night.gain.setTargetAtTime(level, ctx.currentTime, 0.8);
+      if (level > 0 && !nightTimer) nightTimer = setInterval(nightTick, 1000);
+      if (level === 0 && nightTimer) {
+        clearInterval(nightTimer);
+        nightTimer = null;
+      }
     },
     creak() {
       resume();

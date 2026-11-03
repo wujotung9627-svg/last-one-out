@@ -6,10 +6,29 @@
   <title>Last One Out</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Courier+Prime&family=IM+Fell+English:ital@0;1&family=LXGW+WenKai+TC&family=Noto+Serif+TC:wght@400;700;900&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Caveat:wght@400;600&family=Courier+Prime&family=Iansui&family=LXGW+WenKai+TC:wght@400;700&family=Ma+Shan+Zheng&family=Noto+Serif+TC:wght@400;700;900&display=swap">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <!-- Wear for the title: specks eaten out of the letters, edges nudged off true. -->
+  <svg width="0" height="0" style="position: absolute" aria-hidden="true" focusable="false">
+    <filter id="worn" x="-5%" y="-5%" width="110%" height="110%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="4" result="specks" />
+      <feColorMatrix in="specks" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -7 4.6" result="holes" />
+      <feComposite in="SourceGraphic" in2="holes" operator="in" result="eaten" />
+      <feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="9" result="warp" />
+      <feDisplacementMap in="eaten" in2="warp" scale="4" xChannelSelector="R" yChannelSelector="G" />
+    </filter>
+    <!-- Chalk: each stroke broken into grain, with a little dust around it. -->
+    <filter id="chalk" x="-5%" y="-20%" width="110%" height="140%">
+      <feTurbulence type="fractalNoise" baseFrequency="1.4" numOctaves="1" seed="2" result="grain" />
+      <feColorMatrix in="grain" type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 -3.2 2.3" result="dust" />
+      <feComposite in="SourceGraphic" in2="dust" operator="in" result="grainy" />
+      <feGaussianBlur in="SourceGraphic" stdDeviation="1.2" result="halo" />
+      <feColorMatrix in="halo" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.25 0" result="haze" />
+      <feMerge><feMergeNode in="haze" /><feMergeNode in="grainy" /></feMerge>
+    </filter>
+  </svg>
   <canvas id="grain" aria-hidden="true"></canvas>
   <main>
     <section id="title-screen" class="screen">
@@ -19,8 +38,10 @@
       </div>
       <h1 aria-label="值日生, Last One Out">
         <span class="zh" aria-hidden="true">值日生</span>
+        <span class="seal" aria-hidden="true">值日</span>
         <span class="en" aria-hidden="true">LAST ONE <span class="drift">O</span>UT</span>
       </h1>
+      <p class="duty-notice" aria-hidden="true"><span data-text="dutyToday"></span><span id="duty-name">＿＿＿</span></p>
       <p class="tag" data-text="tag"></p>
       <form id="start-form">
         <label for="name" data-text="nameLabel"></label>
@@ -44,6 +65,7 @@
         <canvas id="gl" aria-hidden="true" hidden></canvas>
         <div id="board-name" hidden></div>
         <div id="board-choices" hidden></div>
+        <div id="date-stamp" aria-hidden="true"></div>
         <div id="hotspots"></div>
       </div>
       <p id="whisper"></p>

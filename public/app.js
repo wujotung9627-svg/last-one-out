@@ -12,7 +12,7 @@ const REDUCED_MOTION = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const LINES = {
   en: {
     remembering: 'Remembering your school…',
-    firstLine: 'The others have gone home.',
+    firstLine: "The others have gone home. The floor isn't finished.",
     pick: 'Draw one card. Something will change.',
     card: 'Card',
     changing: 'Something is changing…',
@@ -39,10 +39,11 @@ const LINES = {
     memory3: 'e.g. the exam ranking pinned on the wall',
     start: 'Start your duty',
     headphones: 'Please wear headphones.',
+    dutyToday: 'ON DUTY TODAY  ',
   },
   zh: {
     remembering: '正在想起你的學校…',
-    firstLine: '其他人都回家了。',
+    firstLine: '其他人都回家了。地，還沒拖完。',
     pick: '抽一張卡。有東西會變。',
     card: '卡',
     changing: '有東西正在改變…',
@@ -69,6 +70,7 @@ const LINES = {
     memory3: '例：貼在布告欄上的月考排名',
     start: '開始值日',
     headphones: '請戴上耳機體驗。',
+    dutyToday: '本日值日生　',
   },
 };
 
@@ -152,6 +154,8 @@ function storedLang() {
 function applyLanguage(lang) {
   state.lang = lang === 'zh' ? 'zh' : 'en';
   document.documentElement.lang = state.lang === 'zh' ? 'zh-Hant' : 'en';
+  document.title = state.lang === 'zh' ? '值日生' : 'Last One Out';
+  $('h1').setAttribute('aria-label', document.title);
   for (const node of document.querySelectorAll('[data-text]')) node.textContent = t(node.dataset.text);
   for (const node of document.querySelectorAll('[data-placeholder]')) node.placeholder = t(node.dataset.placeholder);
   ['#m1', '#m2', '#m3'].forEach((id, i) => $(id).setAttribute('aria-label', `${t('memoriesLabel')} ${i + 1}`));
@@ -214,7 +218,7 @@ function startGrain() {
 // Every so often the title slips: its red and cyan ghosts pull apart for a moment.
 function startTitleGlitch() {
   if (REDUCED_MOTION) return;
-  const title = $('h1 .zh');
+  const title = $('h1'); // the red/cyan split is inherited by whichever title is showing
   const slip = () => {
     if (!$('#title-screen').hidden) {
       const steps = 3 + Math.floor(Math.random() * 3);
@@ -325,6 +329,8 @@ function applySound(sound) {
   if (sound === 'papers') setTimeout(() => state.audio.papers(), 2400);
   if (sound === 'speaker') setTimeout(() => state.audio.speaker(), 3000);
   if (sound === 'water') [1800, 3100, 3900, 6200].forEach((ms) => setTimeout(() => state.audio.drip(), ms));
+  if (sound === 'giggle') setTimeout(() => state.audio.giggle(), 2800);
+  if (sound === 'running') setTimeout(() => state.audio.runPast(), 2500);
 }
 
 // Later walks are not quiet: a ball rolls out of nowhere, children play somewhere.
@@ -337,6 +343,8 @@ function scheduleEvents() {
   const later = (ms, play) => eventTimers.push(setTimeout(() => !$('#walk-screen').hidden && play(), ms));
   if (index >= 1 && Math.random() < 0.5) later(4000 + Math.random() * 6000, () => state.audio?.murmur(4));
   if (index >= 2 && Math.random() < 0.6) later(3000 + Math.random() * 5000, () => state.audio?.ball());
+  if (index >= 1 && Math.random() < 0.5) later(6000 + Math.random() * 8000, () => state.audio?.giggle());
+  if (index >= 2 && Math.random() < 0.5) later(9000 + Math.random() * 8000, () => state.audio?.runPast());
   // The bucket drips on every walk.
   for (let ms = 2500; ms < 60000; ms += 5000 + Math.random() * 7000) later(ms, () => state.audio?.drip());
 }
@@ -396,16 +404,28 @@ function placeName(scene) {
     return;
   }
   const board = scene.board;
-  label.textContent = `值日生：${state.name}`;
+  label.textContent = `${state.lang === 'en' ? 'On duty: ' : '值日生：'}${state.name}`;
   label.style.left = `${(board.x + board.w * 0.56) * 100}%`;
   label.style.top = `${(board.y + board.h * 0.62) * 100}%`;
   label.style.maxWidth = `${board.w * 0.42 * 100}%`;
   label.style.fontSize = `${Math.max(10, board.h * $('#stage').clientHeight * 0.16)}px`;
-  label.style.filter = `blur(${BLUR_BY_WALK[Math.min(state.walk.index, BLUR_BY_WALK.length - 1)]}px)`;
+  label.style.filter = `url(#chalk) blur(${BLUR_BY_WALK[Math.min(state.walk.index, BLUR_BY_WALK.length - 1)]}px)`;
   label.hidden = false;
 }
 
-const SCRIBBLES = ['～〜～〜～', '〜～〜～', '～〜～〜～〜'];
+// Half-wiped writing on the board before you choose. The characters are random filler,
+// so nothing here gives away what a line will become.
+const FILLER_ZH = '今天的作業明早交回教室窗戶記得關好值日生擦黑板倒垃圾鎖門走廊不要奔跑考試成績下週公布請家長簽名';
+const FILLER_EN = 'remember to close the windows tomorrow homework due erase the board lock the door before you leave';
+
+function scribble(i) {
+  if (state.lang === 'en') {
+    const words = FILLER_EN.split(' ');
+    return Array.from({ length: 3 + i }, (_, k) => words[(k * 5 + i * 3) % words.length]).join(' ');
+  }
+  const chars = [...FILLER_ZH];
+  return Array.from({ length: 6 + i }, (_, k) => chars[(k * 7 + i * 11) % chars.length]).join('');
+}
 
 // Chalk appears one stroke at a time.
 function chalkWrite(target, text) {
@@ -446,7 +466,7 @@ function placeChoices(scene) {
         maxWidth: `${board.w * 0.5 * 100}%`,
         fontSize: `${Math.max(10, board.h * stageHeight * 0.13)}px`,
       });
-      line.textContent = pick?.index === i && pick.title ? pick.title : SCRIBBLES[i];
+      line.textContent = pick?.index === i && pick.title ? pick.title : scribble(i);
       if (pick) line.classList.add(pick.index === i ? 'kept' : 'gone');
       line.disabled = Boolean(pick);
       line.setAttribute('aria-label', state.lang === 'zh' ? `留下第 ${i + 1} 行` : `Keep line ${i + 1}`);
@@ -454,6 +474,23 @@ function placeChoices(scene) {
       return line;
     }),
   );
+}
+
+// The kept line gets the whole board: wider, wrapped if needed, and small enough to fit.
+function fitKeptLine(line, board, text) {
+  const stage = $('#stage');
+  const width = board.w * stage.clientWidth * 0.9;
+  const height = board.h * stage.clientHeight;
+  const cjk = /[\u3400-\u9fff]/.test(text);
+  const ems = [...text].length * (cjk ? 1.05 : 0.5); // rough width of the text in ems
+  const size = Math.max(10, Math.min(height * 0.2, (width * 2) / Math.max(ems, 1), (width / Math.max(ems, 1)) * 1.6));
+  Object.assign(line.style, {
+    top: `${(board.y + board.h * 0.42) * 100}%`,
+    maxWidth: `${board.w * 0.9 * 100}%`,
+    fontSize: `${size}px`,
+    whiteSpace: 'normal',
+    lineHeight: '1.25',
+  });
 }
 
 // Keeping a line is the draw. The school starts changing while you walk to the back door.
@@ -478,7 +515,10 @@ function choose(index) {
       pick.title = card.title;
       const kept = $('#board-choices').children[index];
       const words = cardText(card);
-      if (kept) chalkWrite(kept, words.title);
+      if (kept) {
+        fitKeptLine(kept, scene.board, words.title);
+        chalkWrite(kept, words.title);
+      }
       state.audio?.chalk(1.2);
       say(words.whisper);
     },
@@ -509,7 +549,32 @@ function walkBack() {
   });
 }
 
+// The camera's date stamp slips back towards the years you were at school, then breaks.
+const YEARS_BACK = [0, 7, 13, 19];
+let stampTimer = null;
+
+function placeDateStamp() {
+  const stamp = $('#date-stamp');
+  clearInterval(stampTimer);
+  const two = (n) => String(n).padStart(2, '0');
+  const today = new Date();
+  const index = state.walk?.index ?? 0;
+  if (index < YEARS_BACK.length) {
+    const year = (today.getFullYear() - YEARS_BACK[index]) % 100;
+    stamp.textContent = `’${two(year)} ${two(today.getMonth() + 1)} ${two(today.getDate())}`;
+    return;
+  }
+  const scramble = () => {
+    const r = () => two(Math.floor(Math.random() * 100));
+    stamp.textContent = `’${r()} ${r()} ${r()}`;
+  };
+  scramble();
+  if (!REDUCED_MOTION) stampTimer = setInterval(scramble, 140);
+}
+
 function render(scene) {
+  placeDateStamp();
+  state.audio?.night(scene.id === 'classroom' ? 'inside' : 'open'); // the corridor is open to the night
   const photo = $('#photo');
   photo.alt = t(`alt_${scene.id}`);
   placeHotspots(scene);
@@ -745,6 +810,7 @@ function renderBook() {
 }
 
 function finish() {
+  state.audio?.night('off');
   return guarded(t('bellWait'), async () => {
     state.ending = await api('/api/ending', { schoolId: state.schoolId });
     show('ending-screen');
@@ -775,6 +841,10 @@ $('#download').addEventListener('click', () => {
 });
 
 $('#again').addEventListener('click', () => location.reload());
+
+$('#name').addEventListener('input', () => {
+  $('#duty-name').textContent = $('#name').value.trim() || '＿＿＿';
+});
 
 // ---------- start ----------
 

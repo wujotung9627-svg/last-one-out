@@ -12,7 +12,11 @@
      English: IM Fell English for lines, Courier Prime for labels. */
   --kai: "LXGW WenKai TC", "BiauKai", "DFKai-SB", "Kaiti TC", serif;
   --serif-zh: "Noto Serif TC", "PMingLiU", serif;
-  --fell: "IM Fell English", Georgia, serif;
+  --brush: "Ma Shan Zheng", "LXGW WenKai TC", serif; /* the Chinese title */
+  --title-en: "Bebas Neue", "Arial Narrow", sans-serif; /* the English title */
+  --hand-zh: "Iansui", "LXGW WenKai TC", serif; /* pencil handwriting */
+  --hand-en: "Caveat", "Segoe Print", cursive;
+  --fell: var(--hand-en);
   --mono: "Courier Prime", "Courier New", monospace;
   --gx: 0px; /* the title's red/cyan split, nudged by app.js */
   --gy: 0px;
@@ -59,8 +63,9 @@ h1 { margin: 0 0 4px; text-align: center; font-weight: 400; }
 
 h1 .zh {
   display: block;
-  font-family: var(--serif-zh);
-  font-weight: 900;
+  font-family: var(--brush);
+  font-weight: 400;
+  filter: url(#worn);
   font-size: clamp(3.5rem, 14vw, 6.5rem);
   letter-spacing: 0.3em;
   margin-right: -0.3em; /* keep the spaced characters centred */
@@ -87,10 +92,11 @@ h1 .en {
   margin-top: 10px;
   font-size: 0.85rem;
   font-weight: 300;
-  letter-spacing: 0.8em;
-  margin-right: -0.8em;
-  font-family: var(--mono);
-  color: var(--muted);
+  letter-spacing: 0.55em;
+  margin-right: -0.55em;
+  font: 1.9rem var(--title-en);
+  color: #cfcab4;
+  filter: url(#worn);
 }
 
 /* One letter that is not always there. */
@@ -248,15 +254,14 @@ html:lang(en) #whisper, html:lang(en) #ending-line, html:lang(en) #card-prompt, 
   overflow: hidden;
   letter-spacing: 0.05em;
   text-shadow: 0 0 3px rgba(236, 236, 226, 0.35);
-  filter: blur(1.6px);
   pointer-events: auto;
   cursor: pointer;
 }
 
-.chalk-line:hover:not(:disabled) { color: rgba(236, 236, 226, 0.85); filter: blur(0.8px); }
+.chalk-line:hover:not(:disabled) { color: rgba(250, 250, 244, 0.98); }
 .chalk-line:focus-visible { outline: 1px dashed rgba(236, 236, 226, 0.5); }
 .chalk-line:disabled { cursor: default; }
-.chalk-line.kept { color: rgba(242, 242, 232, 0.9); filter: none; }
+.chalk-line.kept { color: rgba(246, 246, 238, 0.95); }
 .chalk-line.gone { opacity: 0; }
 .chalk-line.erased { animation: erase 0.8s ease-in forwards; }
 
@@ -439,4 +444,122 @@ html:lang(en) #whisper, html:lang(en) #ending-line, html:lang(en) #card-prompt, 
 @media (prefers-reduced-motion: reduce) {
   #loading-text, h1 .zh, h1 .drift, .card.waiting .card-inner { animation: none; }
   .card-inner { transition: none; }
+}
+
+/* ---------- Taiwanese details ---------- */
+
+h1 { position: relative; }
+
+/* A school's red seal, pressed a little crooked. */
+.seal {
+  position: absolute;
+  top: 0.6em;
+  right: -1.6em;
+  padding: 6px 3px;
+  border: 3px solid rgba(184, 50, 42, 0.85);
+  border-radius: 3px;
+  color: rgba(184, 50, 42, 0.9);
+  font: 900 1.05rem var(--serif-zh);
+  writing-mode: vertical-rl;
+  letter-spacing: 0.1em;
+  transform: rotate(9deg);
+  mix-blend-mode: screen;
+}
+
+/* The duty notice down the left edge: it fills in as you type your name. */
+.duty-notice {
+  position: absolute;
+  left: 28px;
+  top: 50%;
+  margin: 0;
+  transform: translateY(-50%);
+  writing-mode: vertical-rl;
+  font: 1.15rem var(--kai);
+  letter-spacing: 0.45em;
+  color: #6f6c62;
+}
+
+.duty-notice #duty-name { color: #a9a597; }
+html:lang(en) .duty-notice { font: 0.8rem var(--mono); letter-spacing: 0.35em; }
+
+@media (max-width: 760px) {
+  .duty-notice { display: none; }
+  .seal { right: -1.2em; font-size: 0.85rem; }
+}
+
+/* An old compact camera's orange date stamp in the corner of every photo. */
+#date-stamp {
+  position: absolute;
+  right: 3.2%;
+  bottom: 3.5%;
+  z-index: 2;
+  font: 700 clamp(0.7rem, 1.6vw, 1.15rem) var(--mono);
+  letter-spacing: 0.18em;
+  color: #ff8a2a;
+  text-shadow: 0 0 4px rgba(255, 120, 30, 0.85), 0 0 1px #ffb070;
+  opacity: 0.88;
+  pointer-events: none;
+}
+
+/* ---------- handwriting for every line on screen ---------- */
+
+#whisper, #loading-text, #card-prompt, #ending-line, .tag, .duty-notice, .chalk-line, #board-name, input {
+  font-family: var(--hand-zh);
+}
+
+html:lang(en) #whisper,
+html:lang(en) #loading-text,
+html:lang(en) #card-prompt,
+html:lang(en) #ending-line,
+html:lang(en) .tag,
+html:lang(en) .chalk-line,
+html:lang(en) input {
+  font-family: var(--hand-en);
+  font-style: normal;
+  letter-spacing: 0.02em;
+}
+
+html:lang(en) #whisper { font-size: 1.7rem; }
+html:lang(en) #loading-text, html:lang(en) #ending-line, html:lang(en) #card-prompt { font-size: 1.9rem; }
+html:lang(en) .tag { font-size: 1.45rem; }
+html:lang(en) input { font-size: 1.4rem; }
+#whisper { font-size: 1.4rem; }
+
+/* ---------- chalk on the board ---------- */
+
+.chalk-line, #board-name {
+  font-family: "LXGW WenKai TC", var(--hand-zh);
+  font-weight: 700;
+  color: rgba(244, 244, 236, 0.92);
+  text-shadow: none;
+  filter: url(#chalk);
+}
+
+html:lang(en) .chalk-line { font-family: var(--hand-en); font-weight: 600; }
+
+/* Before you choose: real writing, half wiped away by an eraser. */
+.chalk-line:not(.kept):not(.gone) {
+  opacity: 0.55;
+  -webkit-mask-image: repeating-linear-gradient(100deg, #000 0 14px, rgba(0, 0, 0, 0.18) 14px 26px, #000 26px 34px, rgba(0, 0, 0, 0.35) 34px 48px);
+  mask-image: repeating-linear-gradient(100deg, #000 0 14px, rgba(0, 0, 0, 0.18) 14px 26px, #000 26px 34px, rgba(0, 0, 0, 0.35) 34px 48px);
+}
+
+.chalk-line:not(.kept):not(.gone):not(:disabled):hover { opacity: 0.8; }
+.chalk-line.kept { opacity: 1; -webkit-mask-image: none; mask-image: none; }
+
+/* ---------- one language at a time ---------- */
+
+html:lang(zh-Hant) h1 .en { display: none; }
+html:lang(en) h1 .zh, html:lang(en) .seal { display: none; }
+
+html:lang(en) h1 .en {
+  margin: 0 -0.3em 0 0;
+  font-size: clamp(3.2rem, 12vw, 6rem);
+  letter-spacing: 0.3em;
+  line-height: 1;
+  color: #ebe8de;
+  text-shadow:
+    var(--gx) var(--gy) 0 rgba(255, 30, 60, 0.55),
+    calc(-1 * var(--gx)) calc(-1 * var(--gy)) 0 rgba(0, 210, 255, 0.45);
+  animation: tube 9s infinite;
 }

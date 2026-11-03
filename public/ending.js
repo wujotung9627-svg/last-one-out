@@ -3,16 +3,34 @@
 // The player's name only exists on this device unless they choose to share the image.
 
 const W = 1600;
-const H = 1200;
+const H = 1080;
 const PAGE = { left: 40, right: 1560, top: 52, bottom: 1040 };
 const GRID = '#4f7f74'; // printed form ink
 const PENCIL = '#2b3440';
 const RED = '#b8322a';
 const MUTED = '#8a8a80';
 const SANS = '"Noto Serif TC", "PMingLiU", serif'; // the form's printed labels
-const KAI = '"LXGW WenKai TC", "BiauKai", "Kaiti TC", serif'; // handwriting
+const KAI = '"Iansui", "LXGW WenKai TC", serif'; // the student's pencil
+const TEACHER = '"LXGW WenKai TC", "BiauKai", serif'; // the teacher's neater red pen
+const HAND_EN = '"Caveat", "Segoe Print", cursive'; // English handwriting
 const MONO = '"Courier Prime", "Courier New", monospace';
 const DIGITS = '〇一二三四五六七八九';
+
+// Every printed word on the form, in one language at a time.
+const FORM = {
+  zh: {
+    name: '姓名', homework: '今天功課＋明天預習', bring: '明天應帶物品', diary: '生活札記', teacher: '師長提醒',
+    checked: '老師核閱', scores: '考試成績', subject: '學習領域', score: '得分', parent: '家長簽章',
+    subjects: ['國語', '數學', '社會', '自然', '英語', '健康', '體育', '音樂', '美勞', '生活'],
+    then: '那時', now: '現在', seen: '閱', duties: '值日生擦黑板拖地關燈鎖門', item: '紅色水桶',
+  },
+  en: {
+    name: 'Name', homework: 'Homework', bring: 'Bring tomorrow', diary: 'Diary', teacher: "Teacher's note",
+    checked: 'Teacher checked', scores: 'Test scores', subject: 'Subject', score: 'Score', parent: "Parent's signature",
+    subjects: ['Chinese', 'Math', 'Social studies', 'Science', 'English', 'Health', 'P.E.', 'Music', 'Art', 'Life skills'],
+    then: 'Then', now: 'Now', seen: 'SEEN', duties: 'On duty: erase the board, mop the floor, lights off, lock the door.', item: 'The red bucket.',
+  },
+};
 const WEEKDAYS = '日一二三四五六';
 
 function loadImage(src) {
@@ -92,9 +110,9 @@ function printed(c, text, x, y, size = 22, align = 'center') {
 
 // Writes text top to bottom, columns right to left, one character per cell.
 // English is written across, the way a student writes English on Chinese grid paper.
-function horizontal(c, text, { left, top, width, lineHeight, color, size, maxLines }) {
+function horizontal(c, text, { left, top, width, lineHeight, color, size, maxLines, font = HAND_EN }) {
   c.fillStyle = color;
-  c.font = `${size}px ${KAI}`;
+  c.font = `${size}px ${font}`;
   c.textAlign = 'left';
   c.textBaseline = 'alphabetic';
   const lines = [];
@@ -112,7 +130,7 @@ function horizontal(c, text, { left, top, width, lineHeight, color, size, maxLin
   lines.slice(0, maxLines).forEach((l, i) => c.fillText(l, left, top + lineHeight * (i + 1)));
 }
 
-function vertical(c, text, { right, top, cell, rows, cols, color, size, rand, marks = false }) {
+function vertical(c, text, { right, top, cell, rows, cols, color, size, rand, marks = false, font = KAI }) {
   const chars = [...text.replace(/\s+/g, '')];
   c.textAlign = 'center';
   c.textBaseline = 'middle';
@@ -125,7 +143,7 @@ function vertical(c, text, { right, top, cell, rows, cols, color, size, rand, ma
     const ch = chars[i];
     const punct = '，。、！？：；'.includes(ch);
     c.fillStyle = color;
-    c.font = `${punct ? size * 0.8 : size}px ${KAI}`;
+    c.font = `${punct ? size * 0.8 : size}px ${font}`;
     c.fillText(ch, punct ? x + cell * 0.22 : x, punct ? y - cell * 0.22 : y);
     placed.push({ x, y, punct });
   }
@@ -151,7 +169,7 @@ function vertical(c, text, { right, top, cell, rows, cols, color, size, rand, ma
   }
 }
 
-function tapedPhoto(c, img, x, y, w, h, angle, caption) {
+function tapedPhoto(c, img, x, y, w, h, angle, caption, english) {
   c.save();
   c.translate(x + w / 2, y + h / 2);
   c.rotate(angle);
@@ -167,7 +185,7 @@ function tapedPhoto(c, img, x, y, w, h, angle, caption) {
     c.fillRect(-w / 2, -h / 2, w, h);
   }
   c.fillStyle = PENCIL;
-  c.font = `26px ${KAI}`;
+  c.font = english ? `30px ${HAND_EN}` : `26px ${KAI}`;
   c.textAlign = 'left';
   c.textBaseline = 'middle';
   c.fillText(caption, -w / 2, h / 2 + 18);
@@ -177,7 +195,7 @@ function tapedPhoto(c, img, x, y, w, h, angle, caption) {
   c.restore();
 }
 
-function stamp(c, x, y) {
+function stamp(c, x, y, word) {
   c.save();
   c.translate(x, y);
   c.rotate(-0.16);
@@ -187,39 +205,17 @@ function stamp(c, x, y) {
   c.arc(0, 0, 44, 0, Math.PI * 2);
   c.stroke();
   c.fillStyle = RED;
-  c.font = `bold 50px ${KAI}`;
+  c.font = word.length > 1 ? `bold 24px ${MONO}` : `bold 50px ${TEACHER}`;
   c.textAlign = 'center';
   c.textBaseline = 'middle';
-  c.fillText('閱', 0, 3);
+  c.fillText(word, 0, 3);
   c.restore();
-}
-
-function englishStrip(c, book, hideName) {
-  c.fillStyle = '#0b0c0b';
-  c.fillRect(0, PAGE.bottom + 20, W, H - PAGE.bottom - 20);
-  c.textAlign = 'left';
-  c.textBaseline = 'alphabetic';
-  c.fillStyle = '#b9b5a8';
-  c.font = `700 22px ${MONO}`;
-  c.fillText('Contact book · Last One Out', PAGE.left, PAGE.bottom + 62);
-  c.font = `20px ${MONO}`;
-  c.fillStyle = '#8f8c82';
-  const lines = [
-    `On duty: ${hideName ? '—' : book.name}.  What you remembered: ${book.memories.join(' / ') || '—'}`,
-    `What it became: ${(book.changes_en ?? book.changes).join(' · ')}`,
-    `Teacher's note: ${book.comment_en ?? book.comment}`,
-  ];
-  lines.forEach((line, i) => {
-    let shown = line;
-    while (c.measureText(shown).width > W - 2 * PAGE.left && shown.length > 4) shown = `${shown.slice(0, -2)}…`;
-    c.fillText(shown, PAGE.left, PAGE.bottom + 96 + i * 30);
-  });
 }
 
 export async function drawContactBook(canvas, book, hideName) {
   // Canvas text needs the web fonts loaded first, or it falls back silently.
   await Promise.all(
-    [`36px ${KAI}`, `bold 22px ${SANS}`, `20px ${MONO}`].map((font) => document.fonts?.load(font, '值日生 On duty').catch(() => null)),
+    [`36px ${KAI}`, `36px ${TEACHER}`, `30px ${HAND_EN}`, `bold 22px ${SANS}`, `20px ${MONO}`].map((font) => document.fonts?.load(font, '值日生 On duty').catch(() => null)),
   );
   canvas.width = W;
   canvas.height = H;
@@ -235,11 +231,13 @@ export async function drawContactBook(canvas, book, hideName) {
   const split = 800; // where the signature boxes begin
 
   // Name, top left.
-  printed(c, '姓名', 70, 112, 22, 'left');
+  const f = FORM[book.lang === 'en' ? 'en' : 'zh'];
+  const english = book.lang === 'en';
+  printed(c, f.name, 70, 112, 22, 'left');
   c.fillStyle = PENCIL;
-  c.font = `36px ${KAI}`;
+  c.font = `${english ? 40 : 36}px ${english ? HAND_EN : KAI}`;
   c.textAlign = 'left';
-  c.fillText(hideName ? '＿＿＿' : book.name, 130, 114);
+  c.fillText(hideName ? '＿＿＿' : book.name, english ? 150 : 130, 114);
   c.strokeStyle = GRID;
   c.lineWidth = 1.5;
   c.beginPath();
@@ -249,23 +247,34 @@ export async function drawContactBook(canvas, book, hideName) {
 
   // Date column (far right).
   box(c, 1440, top, 100, bottom - top);
-  const [year, month, day, weekday] = rocDate(new Date());
-  vertical(c, `${year}${month}${day}`, { right: 1540, top: top + 20, cell: 50, rows: 12, cols: 1, color: PENCIL, size: 38, rand });
-  vertical(c, weekday, { right: 1540, top: top + 20 + 12 * 50 + 10, cell: 50, rows: 3, cols: 1, color: PENCIL, size: 38, rand });
+  if (english) {
+    const now = new Date();
+    const parts = [now.toLocaleDateString('en-US', { weekday: 'short' }), now.toLocaleDateString('en-US', { month: 'short' }), String(now.getDate()), String(now.getFullYear())];
+    c.fillStyle = PENCIL;
+    c.font = `36px ${HAND_EN}`;
+    c.textAlign = 'center';
+    parts.forEach((part, i) => c.fillText(part, 1490, top + 70 + i * 60));
+  } else {
+    const [year, month, day, weekday] = rocDate(new Date());
+    vertical(c, `${year}${month}${day}`, { right: 1540, top: top + 20, cell: 50, rows: 12, cols: 1, color: PENCIL, size: 38, rand });
+    vertical(c, weekday, { right: 1540, top: top + 20 + 12 * 50 + 10, cell: 50, rows: 3, cols: 1, color: PENCIL, size: 38, rand });
+  }
 
   // Today's work + tomorrow's preview: the duty list.
   box(c, 1190, top, 250, head);
-  printed(c, '今天功課＋明天預習', 1315, top + head / 2, 21);
+  printed(c, f.homework, 1315, top + head / 2, 21);
   box(c, 1190, top + head, 250, 450);
-  vertical(c, '值日生擦黑板拖地關燈鎖門', { right: 1430, top: top + head + 20, cell: 46, rows: 6, cols: 4, color: PENCIL, size: 34, rand });
+  if (english) horizontal(c, f.duties, { left: 1204, top: top + head + 6, width: 222, lineHeight: 40, color: PENCIL, size: 32, maxLines: 10 });
+  else vertical(c, f.duties, { right: 1430, top: top + head + 20, cell: 46, rows: 6, cols: 4, color: PENCIL, size: 34, rand });
   box(c, 1190, top + head + 450, 250, head);
-  printed(c, '明天應帶物品', 1315, top + head * 1.5 + 450, 21);
+  printed(c, f.bring, 1315, top + head * 1.5 + 450, 21);
   box(c, 1190, top + head * 2 + 450, 250, bottom - (top + head * 2 + 450));
-  vertical(c, '紅色水桶', { right: 1340, top: top + head * 2 + 470, cell: 48, rows: 4, cols: 1, color: PENCIL, size: 36, rand });
+  if (english) horizontal(c, f.item, { left: 1204, top: top + head * 2 + 460, width: 222, lineHeight: 40, color: PENCIL, size: 32, maxLines: 3 });
+  else vertical(c, f.item, { right: 1340, top: top + head * 2 + 470, cell: 48, rows: 4, cols: 1, color: PENCIL, size: 36, rand });
 
   // Diary on manuscript grid: the memories and tonight.
   box(c, 640, top, 550, head);
-  printed(c, '生活札記', 915, top + head / 2);
+  printed(c, f.diary, 915, top + head / 2);
   const cell = 50;
   const cols = 11;
   const rows = 16;
@@ -285,11 +294,10 @@ export async function drawContactBook(canvas, book, hideName) {
   }
   box(c, 640, top + head, 550, bottom - top - head);
   // Chinese is written down in columns; English across. The page follows the player's language.
-  const english = book.lang === 'en';
   if (english) {
     const memories = book.memories_en?.length ? book.memories_en : book.memories;
     const diary = ['Today I was on duty.', ...memories.map((m) => `${m.replace(/[.。!！]$/, '')}.`), `${(book.changes_en ?? book.changes).join('. ')}.`].join(' ');
-    horizontal(c, diary, { left: 652, top: top + head + 6, width: 524, lineHeight: cell, color: PENCIL, size: 30, maxLines: rows });
+    horizontal(c, diary, { left: 652, top: top + head + 6, width: 524, lineHeight: cell, color: PENCIL, size: 36, maxLines: rows });
   } else {
     const cjk = (text) => /[\u3400-\u9fff]/.test(text) && !/[A-Za-z]{2,}/.test(text);
     const changes = book.changes.filter(cjk);
@@ -303,26 +311,26 @@ export async function drawContactBook(canvas, book, hideName) {
 
   // The teacher's reminder, in red.
   box(c, 450, top, 190, head);
-  printed(c, '師長提醒', 545, top + head / 2);
+  printed(c, f.teacher, 545, top + head / 2, english ? 19 : 22);
   box(c, 450, top + head, 190, split - top - head);
   if (english) {
-    horizontal(c, book.comment_en ?? book.comment ?? '', { left: 462, top: top + head + 4, width: 166, lineHeight: 34, color: RED, size: 25, maxLines: 17 });
+    horizontal(c, book.comment_en ?? book.comment ?? '', { left: 462, top: top + head + 4, width: 166, lineHeight: 34, color: RED, size: 30, maxLines: 17 });
   } else {
-    vertical(c, book.comment ?? '', { right: 630, top: top + head + 14, cell: 42, rows: 13, cols: 4, color: RED, size: 32, rand });
+    vertical(c, book.comment ?? '', { right: 630, top: top + head + 14, cell: 42, rows: 13, cols: 4, color: RED, size: 32, rand, font: TEACHER });
   }
   box(c, 450, split, 190, head);
-  printed(c, '老師核閱', 545, split + head / 2);
+  printed(c, f.checked, 545, split + head / 2, english ? 19 : 22);
   box(c, 450, split + head, 190, bottom - split - head);
-  stamp(c, 545, split + head + (bottom - split - head) / 2);
+  stamp(c, 545, split + head + (bottom - split - head) / 2, f.seen);
 
   // Exam results, left blank; the two photos are taped over them.
   box(c, 60, top, 390, head);
-  printed(c, '考試成績', 255, top + head / 2);
-  const subjects = ['國語', '數學', '社會', '自然', '英語', '健康', '體育', '音樂', '美勞', '生活'];
+  printed(c, f.scores, 255, top + head / 2);
+  const subjects = f.subjects;
   const rowH = (split - top - head) / (subjects.length + 1);
   box(c, 60, top + head, 390, split - top - head);
-  printed(c, '學習領域', 155, top + head + rowH / 2, 18);
-  printed(c, '得分', 355, top + head + rowH / 2, 18);
+  printed(c, f.subject, 155, top + head + rowH / 2, 18);
+  printed(c, f.score, 355, top + head + rowH / 2, 18);
   subjects.forEach((subject, i) => {
     const y = top + head + rowH * (i + 1);
     c.strokeStyle = GRID;
@@ -338,12 +346,10 @@ export async function drawContactBook(canvas, book, hideName) {
   c.lineTo(260, split);
   c.stroke();
   box(c, 60, split, 390, head);
-  printed(c, '家長簽章', 255, split + head / 2);
+  printed(c, f.parent, 255, split + head / 2);
   box(c, 60, split + head, 390, bottom - split - head); // nobody signed
 
   const [first, last] = await Promise.all([loadImage(book.first), loadImage(book.last)]);
-  tapedPhoto(c, first, 92, 250, 300, 200, -0.05, '那時');
-  tapedPhoto(c, last, 120, 520, 300, 200, 0.04, '現在');
-
-  englishStrip(c, book, hideName);
+  tapedPhoto(c, first, 92, 250, 300, 200, -0.05, f.then, english);
+  tapedPhoto(c, last, 120, 520, 300, 200, 0.04, f.now, english);
 }

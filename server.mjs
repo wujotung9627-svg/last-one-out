@@ -262,24 +262,24 @@ const HOUSE_STYLE = [
   'Photograph taken with an early-2000s compact digital camera and its on-camera flash: flash falloff, slightly overexposed near the lens, sensor noise, mild JPEG compression, faint green cast from fluorescent tubes.',
   'Not cinematic, not HDR, no dramatic color grading: an ordinary snapshot.',
   'An old but well-kept Taiwanese school at night, clean and in daily use, as if the students left ten minutes ago. Not abandoned, not ruined, no dust or decay.',
-  'Nobody in the frame. No ghosts, no blood, no readable text, no flags, no statues, no portraits, no slogans, no religious objects.',
-  "The student on duty's red plastic bucket with a wet string mop in it is the only saturated color, and part of the floor is freshly mopped and still wet, as if the cleaning was left half done.",
+  'Nobody in the frame. No ghosts, no blood, no readable text, no logos, no flags, no statues, no portraits, no slogans, no religious objects.',
+  'Part of the floor is freshly mopped and still wet, as if the cleaning was left half done.',
 ].join(' ');
 
 const SCENES = [
   {
     id: 'corridor',
-    base: 'Camera about 40 cm above the floor, looking down a long open-air school corridor: terrazzo floor, pale green lower walls, iron window grilles on one side, a row of wooden classroom doors on the other. One-point perspective, symmetrical. Every fluorescent tube is on; outside is pitch black. The red bucket and mop stand halfway down the corridor, and a wet mop trail on the terrazzo leads from them towards the camera.',
+    base: 'Camera about 40 cm above the floor, looking down a long open-air school corridor: terrazzo floor, pale green lower walls, iron window grilles on one side with a long terrazzo hand-wash sink and a row of metal taps beneath them, a row of wooden classroom doors on the other. One-point perspective, symmetrical. Every fluorescent tube is on; outside is pitch black. A faded, slightly worn red plastic bucket with a string mop stands against the wall to one side, half in shadow and not in the centre of the frame; a wet mop trail on the terrazzo runs down the corridor.',
     find: 'door',
   },
   {
     id: 'door',
-    base: "Standing close to one classroom's front door: a wooden sliding door with a small glass window, a blank class sign above it, terrazzo floor, fluorescent light from the corridor ceiling. The red bucket stands right beside the door, the mop leaning against the wall.",
+    base: "Standing close to one classroom's front door: a wooden sliding door with a small glass window, a blank wooden class sign sticking out above the doorway, a low wooden shoe cabinet beside the door with pairs of students' white sneakers and canvas shoes in its cubbies, terrazzo floor, fluorescent light from the corridor ceiling. The floor in front of the door is still wet from mopping; no bucket here.",
     find: 'door',
   },
   {
     id: 'classroom',
-    base: "Inside the empty classroom: rows of typical Taiwanese school desks and chairs — light wooden desktops on steel-tube frames painted blue-green, an open shelf under each desktop for books, and matching chairs with a wooden seat and wooden backrest on a steel-tube frame (no folding chairs, no plastic chairs) — a green chalkboard with faint half-erased chalk marks, one chair pulled out, a lunch-box steamer by the wall with its small light on, a single fluorescent tube lit above the teacher's desk, the back door half open. The red bucket and mop stand in the aisle near the teacher's desk, the floor around them still wet.",
+    base: "Inside the empty classroom of an old Taiwanese school: rows of old-style school desks made entirely of dark reddish-brown varnished wood, each with a closed wooden box front under the desktop where books are kept, and matching all-wood chairs with slatted backrests (no metal frames, no folding chairs, no plastic chairs); ceiling fans hanging still, an old CRT television on a wall bracket in a top corner, a small wall speaker, a dark green chalkboard with faint half-erased chalk marks and a narrow ruled column at its right edge for the date and the student on duty (left blank), chalk stubs and two felt erasers on the chalk ledge, a raised wooden platform with the teacher's wooden desk, a row of wooden cubby lockers along the back wall, one chair pulled out, and on a low cabinet at the back a classic cream-white round electric rice cooker with an aluminium dome lid, a black knob, two metal side handles and a black front switch with its small orange light on (no logo, no text), a single fluorescent tube lit above the teacher's desk, the back door half open. At the back, a metal cleaning cabinet stands open with brooms and a string mop leaning beside it, and part of the floor is still wet.",
     find: 'door',
     board: 'chalkboard',
   },
@@ -309,15 +309,16 @@ Reply with JSON only, details in English: {"corridor":"...","door":"...","classr
 
 const CARDS_SYSTEM = `You deal the choices in "Last One Out", a quiet horror game set in a remembered Taiwanese school at night. The player, the student on duty, walks the same three places again and again: a corridor, a classroom door, a classroom. At the end of each walk three half-erased lines are on the chalkboard; the player keeps one, and that line changes something in all three photos.
 Escalate quickly, loop by loop:
-- Loop 1: small but clearly visible and wrong (one tube light is dark, the red bucket now stands somewhere it could not be, every classroom door is ajar, the wet mop trail runs up the wall).
+- Loop 1: small but clearly visible and wrong (one tube light is dark, the duty student's faded red bucket now stands somewhere it could not be, every classroom door is ajar, the wet mop trail runs up the wall).
 - Loop 2: the space itself distorts (the corridor is impossibly long, the same door repeats into the distance, the ceiling hangs far too low, the floor tilts, the room is mirrored, the windows are on the wrong side).
 - Loop 3: the people from the memory are back, but only as what they leave, and with them what hurt (a school uniform draped over every chair as if the class were sitting there, the shadows of a whole class on the floor at noon nap time with nobody casting them, a dark adult silhouette at the far end of the corridor with back turned, every chair turned to face the camera).
 Underneath, this school holds what hurt the student: a teacher's cold attention (being singled out, made to stand outside the classroom: one chair alone outside the door), being left out by classmates (every desk pushed away from one desk left alone in the middle, every chair turned away from it), and the weight of exams (stacks of test papers up to the ceiling, red pen marks everywhere, a wall covered in ranking sheets with no readable names). From loop 2 on, bring these in through objects and space, never through violence, insults, readable words or anything suggesting self-harm.
-The image editor refuses any picture of children or students, so classmates never appear in person: show them only through what they left behind (school uniforms draped over every chair, a school bag hanging on every desk, the shadows of a full class on the floor with nobody casting them, indoor shoes lined up under every desk). A teacher may appear only as a dark, out-of-focus adult silhouette far away with back turned; otherwise show the teacher through traces (red pen marks, a coat on the lectern). Never show a face. Never add ghosts, blood, injury, death, religion, politics, flags, statues or readable text. Use the player's memories when you can. Never repeat a previous change. The three lines must be very different from each other.
+The image editor refuses any picture of children or students, so classmates never appear in person: show them only through what they left behind (school uniforms draped over every chair, a school bag hanging on every desk, the shadows of a full class on the floor with nobody casting them, sneakers lined up under every desk).
+When uniforms or shoes appear, make them Taiwanese and mixed boys' and girls': short-sleeved white school shirts with navy trim, navy trousers for boys and pleated navy-plaid skirts for girls, a few bow ties, a few navy or dark-red jackets; no crests, no badges, no embroidered names or numbers. Shoes are white sneakers and canvas shoes. A teacher may appear only as a dark, out-of-focus adult silhouette far away with back turned; otherwise show the teacher through traces (red pen marks, a coat on the lectern). Never show a face. Never add ghosts, blood, injury, death, religion, politics, flags, statues or readable text. Use the player's memories when you can. Never repeat a previous change. The three lines must be very different from each other.
 Each line gives one edit instruction per photo. A change may touch one, two or all three photos; leave an instruction empty ("") for a photo that should stay exactly as it is, but make at least one photo change. Each instruction must be doable as an edit of that existing photo and visible in it.
 Reply with JSON only:
-{"cards":[{"title":"at most 6 words in the player's language","whisper":"one short eerie line in the player's language","title_en":"the title in natural English","whisper_en":"the line in natural English","edits":{"corridor":"precise English instruction for the corridor photo, or empty","door":"... for the classroom door photo, or empty","classroom":"... for the classroom photo, or empty"},"sound":"none|silence|echo|bell|ball|laughter|chalk|chair|papers|speaker|water"}]}
-Sounds (pick the one that fits the change): ball = a ball bounces and rolls down the corridor; laughter = children playing somewhere out of sight; chalk = chalk scratching on a board; chair = a chair dragged across the floor; papers = sheets of paper turned and shuffled; speaker = the school speaker crackles and chimes, then nobody speaks; water = water dripping; bell = the school bell; echo = every step echoes far too long; silence = all sound stops.`;
+{"cards":[{"title":"at most 6 words in the player's language","whisper":"one short eerie line in the player's language","title_en":"the title in natural English","whisper_en":"the line in natural English","edits":{"corridor":"precise English instruction for the corridor photo, or empty","door":"... for the classroom door photo, or empty","classroom":"... for the classroom photo, or empty"},"sound":"none|silence|echo|bell|ball|laughter|giggle|running|chalk|chair|papers|speaker|water"}]}
+Sounds (pick the one that fits the change): ball = a ball bounces and rolls down the corridor; laughter = children playing somewhere out of sight; giggle = a child giggles nearby, unseen; running = small feet run past behind you; chalk = chalk scratching on a board; chair = a chair dragged across the floor; papers = sheets of paper turned and shuffled; speaker = the school speaker crackles and chimes, then nobody speaks; water = water dripping; bell = the school bell; echo = every step echoes far too long; silence = all sound stops.`;
 
 const COMMENT_SYSTEM = `Write one short teacher's note for a student's contact book. The student went back to their old school, alone, and saw the changes listed below.
 Write as a teacher who finally noticed this student: warm, a little uncanny, and kind about whatever was hard back then. At most 30 words. No names, no death, no ghosts, no danger.
@@ -344,7 +345,7 @@ function parseJson(text) {
   }
 }
 
-const SOUNDS = new Set(['none', 'silence', 'echo', 'bell', 'ball', 'laughter', 'chalk', 'chair', 'papers', 'speaker', 'water']);
+const SOUNDS = new Set(['none', 'silence', 'echo', 'bell', 'ball', 'laughter', 'chalk', 'chair', 'papers', 'speaker', 'water', 'giggle', 'running']);
 
 function parseDeal(text) {
   const cards = parseJson(text)?.cards;
