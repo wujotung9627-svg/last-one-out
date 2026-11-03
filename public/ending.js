@@ -296,7 +296,8 @@ export async function drawContactBook(canvas, book, hideName) {
   // Chinese is written down in columns; English across. The page follows the player's language.
   if (english) {
     const memories = book.memories_en?.length ? book.memories_en : book.memories;
-    const diary = ['Today I was on duty.', ...memories.map((m) => `${m.replace(/[.。!！]$/, '')}.`), `${(book.changes_en ?? book.changes).join('. ')}.`].join(' ');
+    const sentence = (t) => (t ? t[0].toUpperCase() + t.slice(1).toLowerCase() : t); // titles read as plain sentences
+    const diary = ['Today I was on duty.', ...memories.map((m) => `${m.replace(/[.。!！]$/, '')}.`), `${(book.changes_en ?? book.changes).map(sentence).join('. ')}.`].join(' ');
     horizontal(c, diary, { left: 652, top: top + head + 6, width: 524, lineHeight: cell, color: PENCIL, size: 36, maxLines: rows });
   } else {
     const cjk = (text) => /[\u3400-\u9fff]/.test(text) && !/[A-Za-z]{2,}/.test(text);

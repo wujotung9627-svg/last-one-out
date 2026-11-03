@@ -1,0 +1,565 @@
+:root {
+  --bg: #050605;
+  --surface: #121512;
+  --border: #2a302a;
+  --fg: #e6e4dc;
+  --muted: #8d8b82;
+  --accent: #d0201c;
+  --paper: #ddd6c3;
+  --ink: #2a2a26;
+  --stamp: #ff7a1a;
+  /* Chinese: Noto Serif TC for printed text, LXGW WenKai TC for handwriting.
+     English: IM Fell English for lines, Courier Prime for labels. */
+  --kai: "LXGW WenKai TC", "BiauKai", "DFKai-SB", "Kaiti TC", serif;
+  --serif-zh: "Noto Serif TC", "PMingLiU", serif;
+  --brush: "Ma Shan Zheng", "LXGW WenKai TC", serif; /* the Chinese title */
+  --title-en: "Bebas Neue", "Arial Narrow", sans-serif; /* the English title */
+  --hand-zh: "Iansui", "LXGW WenKai TC", serif; /* pencil handwriting */
+  --hand-en: "Caveat", "Segoe Print", cursive;
+  --fell: var(--hand-en);
+  --mono: "Courier Prime", "Courier New", monospace;
+  --gx: 0px; /* the title's red/cyan split, nudged by app.js */
+  --gy: 0px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: radial-gradient(ellipse at 50% 35%, #0f1410 0%, var(--bg) 70%);
+  background-attachment: fixed;
+  color: var(--fg);
+  font: 16px/1.5 var(--serif-zh);
+}
+
+html:lang(en) body { font-family: var(--fell); }
+
+/* Film grain over everything; drawn by app.js. Clicks pass straight through. */
+#grain {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  opacity: 0.07;
+  z-index: 20;
+}
+
+.screen {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 16px;
+}
+
+.screen[hidden] { display: none; }
+
+/* ---------- title ---------- */
+
+h1 { margin: 0 0 4px; text-align: center; font-weight: 400; }
+
+h1 .zh {
+  display: block;
+  font-family: var(--brush);
+  font-weight: 400;
+  filter: url(#worn);
+  font-size: clamp(3.5rem, 14vw, 6.5rem);
+  letter-spacing: 0.3em;
+  margin-right: -0.3em; /* keep the spaced characters centred */
+  line-height: 1.1;
+  color: #ebe8de;
+  text-shadow:
+    var(--gx) var(--gy) 0 rgba(255, 30, 60, 0.55),
+    calc(-1 * var(--gx)) calc(-1 * var(--gy)) 0 rgba(0, 210, 255, 0.45),
+    0 0 18px rgba(200, 255, 220, 0.12);
+  animation: tube 9s infinite;
+}
+
+/* A fluorescent tube that is about to go. */
+@keyframes tube {
+  0%, 88%, 100% { opacity: 1; }
+  88.6% { opacity: 0.25; }
+  89.2% { opacity: 1; }
+  93% { opacity: 0.7; }
+  93.4% { opacity: 1; }
+}
+
+h1 .en {
+  display: block;
+  margin-top: 10px;
+  font-size: 0.85rem;
+  font-weight: 300;
+  letter-spacing: 0.55em;
+  margin-right: -0.55em;
+  font: 1.9rem var(--title-en);
+  color: #cfcab4;
+  filter: url(#worn);
+}
+
+/* One letter that is not always there. */
+h1 .drift { display: inline-block; animation: drift 11s infinite; }
+
+@keyframes drift {
+  0%, 60%, 100% { opacity: 1; transform: none; }
+  61% { opacity: 0; }
+  70% { opacity: 0; transform: translateY(-3px); }
+  71% { opacity: 1; transform: translateY(1px); }
+}
+
+.tag { margin: 0 0 12px; color: var(--muted); text-align: center; font-family: var(--kai); font-size: 1.05rem; letter-spacing: 0.05em; }
+html:lang(en) .tag { font-family: var(--fell); font-style: italic; }
+
+.lang-switch { position: absolute; top: 16px; right: 16px; display: flex; gap: 4px; }
+.lang-switch button { padding: 6px 10px; border-color: transparent; font: 0.85rem var(--mono); color: var(--muted); }
+.lang-switch button[aria-pressed="true"] { color: var(--fg); border-color: var(--border); }
+#title-screen { position: relative; }
+
+.headphones { margin: 6px 0 0; text-align: center; font: 0.85rem var(--mono); letter-spacing: 0.15em; color: #8f8b7e; }
+html:lang(zh-Hant) .headphones { font-family: var(--kai); letter-spacing: 0.2em; }
+
+form { display: grid; gap: 10px; width: min(100%, 520px); }
+label, legend { font: 0.75rem var(--mono); letter-spacing: 0.25em; text-transform: uppercase; color: var(--muted); }
+html:lang(zh-Hant) label, html:lang(zh-Hant) legend { font: 0.95rem var(--serif-zh); letter-spacing: 0.2em; }
+fieldset { display: grid; gap: 6px; margin: 10px 0 4px; padding: 0; border: 0; }
+.hint { margin: 0; color: #6c6a62; font-size: 0.8rem; }
+
+/* Inputs are lines in a contact book, written in brush hand. */
+input {
+  width: 100%;
+  padding: 10px 2px;
+  border: 0;
+  border-bottom: 1px solid #343a33;
+  border-radius: 0;
+  background: transparent;
+  color: var(--fg);
+  font: 1.15rem var(--kai);
+}
+
+input:focus { outline: none; border-bottom-color: #a9a38f; }
+input::placeholder { color: #4d4f48; font-size: 0.95rem; }
+input[readonly] { color: #b8b4a6; }
+
+button {
+  padding: 12px 18px;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  cursor: pointer;
+}
+
+button:hover { border-color: var(--muted); }
+button:disabled { cursor: default; }
+
+#start-form button[type="submit"] {
+  margin-top: 8px;
+  letter-spacing: 0.5em;
+  text-transform: uppercase;
+  font: 0.9rem var(--mono);
+}
+
+html:lang(zh-Hant) #start-form button[type="submit"] { font: 1.1rem var(--serif-zh); letter-spacing: 0.6em; }
+
+#start-form button[type="submit"]:hover {
+  text-shadow: 1px 0 rgba(255, 30, 60, 0.6), -1px 0 rgba(0, 210, 255, 0.5);
+}
+
+/* ---------- the walk ---------- */
+
+#stage {
+  position: relative;
+  width: min(100%, calc(86vh * 1.5));
+  aspect-ratio: 3 / 2;
+  overflow: hidden;
+  background: #000;
+  box-shadow: 0 0 60px rgba(0, 0, 0, 0.8);
+}
+
+/* A soft vignette, like a cheap lens. */
+#stage::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.45) 100%);
+}
+
+#photo, #photo-next {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill; /* keeps door boxes aligned with the photo */
+}
+
+#photo-next { opacity: 0; pointer-events: none; }
+
+#gl { position: absolute; inset: 0; width: 100%; height: 100%; }
+#gl[hidden] { display: none; }
+
+#hotspots { position: absolute; inset: 0; z-index: 1; }
+
+.hotspot {
+  position: absolute;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: transparent;
+}
+
+.hotspot:hover { background: rgba(255, 255, 240, 0.05); box-shadow: inset 0 0 0 1px rgba(255, 255, 240, 0.12); }
+.hotspot:focus-visible { outline: 2px dashed rgba(255, 255, 240, 0.5); }
+
+#board-name {
+  position: absolute;
+  transform: translateY(-50%);
+  overflow: hidden;
+  white-space: nowrap;
+  color: rgba(236, 236, 226, 0.82);
+  font-family: var(--kai);
+  text-shadow: 0 0 2px rgba(236, 236, 226, 0.4);
+  pointer-events: none;
+}
+
+html:lang(en) #whisper, html:lang(en) #ending-line, html:lang(en) #card-prompt, html:lang(en) #loading-text { font-family: var(--fell); font-style: italic; }
+
+#whisper {
+  min-height: 1.5em;
+  margin: 0;
+  color: #a6a397;
+  font-family: var(--kai);
+  font-size: 1.3rem;
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+
+/* Three half-erased lines of chalk; keep one, erase two. */
+#board-choices { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+#board-choices[hidden] { display: none; }
+
+.chalk-line {
+  position: absolute;
+  transform: translateY(-50%);
+  padding: 2px 6px;
+  border: 0;
+  background: transparent;
+  color: rgba(236, 236, 226, 0.55);
+  font-family: var(--kai);
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  letter-spacing: 0.05em;
+  text-shadow: 0 0 3px rgba(236, 236, 226, 0.35);
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.chalk-line:hover:not(:disabled) { color: rgba(250, 250, 244, 0.98); }
+.chalk-line:focus-visible { outline: 1px dashed rgba(236, 236, 226, 0.5); }
+.chalk-line:disabled { cursor: default; }
+.chalk-line.kept { color: rgba(246, 246, 238, 0.95); }
+.chalk-line.gone { opacity: 0; }
+.chalk-line.erased { animation: erase 0.8s ease-in forwards; }
+
+@keyframes erase {
+  40% { opacity: 0.6; filter: blur(3px); transform: translateY(-50%) translateX(6px) scaleX(1.05); }
+  100% { opacity: 0; filter: blur(8px); transform: translateY(-50%) translateX(18px) scaleX(1.2); }
+}
+
+/* ---------- cards: old photo prints, face down ---------- */
+
+#card-prompt {
+  margin: 0 0 8px;
+  font-family: var(--kai);
+  font-size: 1.5rem;
+  letter-spacing: 0.1em;
+  text-align: center;
+}
+
+#cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 210px));
+  gap: 22px;
+  width: min(100%, 720px);
+  justify-content: center;
+}
+
+.card {
+  aspect-ratio: 2 / 3;
+  padding: 0;
+  border: 0;
+  background: none;
+  perspective: 900px;
+}
+
+.card:nth-child(1) { transform: rotate(-2.5deg); }
+.card:nth-child(2) { transform: rotate(1deg) translateY(6px); }
+.card:nth-child(3) { transform: rotate(2deg); }
+
+.card-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform 0.9s cubic-bezier(0.3, 0.7, 0.2, 1);
+}
+
+.card:not(:disabled):hover .card-inner { transform: translateY(-8px) rotate(-1deg); }
+.card.flipped .card-inner { transform: rotateY(180deg); }
+
+.card-face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  border-radius: 3px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+}
+
+/* The back of a print: yellowed paper, a date stamp, a pencil note. */
+.card-back {
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at 28% 22%, rgba(255, 255, 255, 0.35), transparent 55%),
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.025) 0 1px, transparent 1px 3px),
+    var(--paper);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), inset 0 0 36px rgba(120, 95, 50, 0.4);
+}
+
+.card-back .pencil {
+  font-family: var(--kai);
+  font-size: 1.6rem;
+  color: rgba(50, 50, 45, 0.35);
+  transform: rotate(-6deg);
+}
+
+.card-back .stamp {
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+  font: 0.85rem "Courier New", monospace;
+  letter-spacing: 0.12em;
+  color: var(--stamp);
+  text-shadow: 0 0 4px rgba(255, 120, 20, 0.6);
+}
+
+/* The front: a print with a white border. */
+.card-front {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 8px;
+  padding: 10px 10px 14px;
+  transform: rotateY(180deg);
+  background: #efeadb;
+  color: var(--ink);
+  text-align: center;
+}
+
+.card-front img {
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  object-fit: cover;
+  filter: contrast(1.05) saturate(0.85);
+}
+
+.card-front .undeveloped {
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  background: radial-gradient(circle at 50% 45%, #6b6a60, #2b2c28);
+  filter: blur(2px);
+}
+
+.card-front .words { display: grid; align-content: start; gap: 6px; }
+.card-front strong { font-family: var(--kai); font-size: 1.2rem; font-weight: 400; }
+.card-front span { font-size: 0.8rem; color: #5b5a52; }
+
+.card.other .card-front { filter: blur(0.6px) grayscale(0.6); opacity: 0.55; }
+.card.chosen .card-face { outline: 1px solid rgba(208, 32, 28, 0.7); outline-offset: 4px; }
+.card.waiting .card-inner { animation: tremble 0.16s infinite; }
+
+@keyframes tremble {
+  25% { transform: translate(0.6px, -0.4px); }
+  75% { transform: translate(-0.5px, 0.5px); }
+}
+
+#walk-on { letter-spacing: 0.3em; margin-top: 10px; }
+
+/* ---------- ending ---------- */
+
+#daylight { width: min(100%, 960px); }
+#ending-line { margin: 0; font-family: var(--kai); font-size: 1.5rem; text-align: center; }
+#book { width: min(100%, 960px); height: auto; }
+.row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: center; }
+.row label { display: inline-flex; align-items: center; gap: 8px; font-size: 0.9rem; letter-spacing: normal; text-transform: none; color: var(--fg); }
+.row input[type="checkbox"] { width: auto; }
+
+/* ---------- overlays ---------- */
+
+#loading {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  background: rgba(0, 0, 0, 0.62);
+  backdrop-filter: blur(3px) grayscale(0.6);
+}
+
+#loading[hidden] { display: none; }
+
+#loading-text {
+  font-family: var(--kai);
+  font-size: 1.5rem;
+  letter-spacing: 0.15em;
+  animation: breathe 2.4s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  50% { opacity: 0.35; filter: blur(1px); }
+}
+
+#error {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: 16px;
+  z-index: 30;
+  margin: 0;
+  padding: 12px 16px;
+  border: 1px solid #5c2a26;
+  border-radius: 2px;
+  background: #2a1311;
+  color: #f2c9c4;
+}
+
+@media (max-width: 560px) {
+  #cards { gap: 10px; }
+  .card-front strong { font-size: 1rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #loading-text, h1 .zh, h1 .drift, .card.waiting .card-inner { animation: none; }
+  .card-inner { transition: none; }
+}
+
+/* ---------- Taiwanese details ---------- */
+
+h1 { position: relative; }
+
+/* A school's red seal, pressed a little crooked. */
+.seal {
+  position: absolute;
+  top: 0.6em;
+  right: -1.6em;
+  padding: 6px 3px;
+  border: 3px solid rgba(184, 50, 42, 0.85);
+  border-radius: 3px;
+  color: rgba(184, 50, 42, 0.9);
+  font: 900 1.05rem var(--serif-zh);
+  writing-mode: vertical-rl;
+  letter-spacing: 0.1em;
+  transform: rotate(9deg);
+  mix-blend-mode: screen;
+}
+
+/* The duty notice down the left edge: it fills in as you type your name. */
+.duty-notice {
+  position: absolute;
+  left: 28px;
+  top: 50%;
+  margin: 0;
+  transform: translateY(-50%);
+  writing-mode: vertical-rl;
+  font: 1.15rem var(--kai);
+  letter-spacing: 0.45em;
+  color: #6f6c62;
+}
+
+.duty-notice #duty-name { color: #a9a597; }
+html:lang(en) .duty-notice { font: 0.8rem var(--mono); letter-spacing: 0.35em; }
+
+@media (max-width: 760px) {
+  .duty-notice { display: none; }
+  .seal { right: -1.2em; font-size: 0.85rem; }
+}
+
+/* An old compact camera's orange date stamp in the corner of every photo. */
+#date-stamp {
+  position: absolute;
+  right: 3.2%;
+  bottom: 3.5%;
+  z-index: 2;
+  font: 700 clamp(0.7rem, 1.6vw, 1.15rem) var(--mono);
+  letter-spacing: 0.18em;
+  color: #ff8a2a;
+  text-shadow: 0 0 4px rgba(255, 120, 30, 0.85), 0 0 1px #ffb070;
+  opacity: 0.88;
+  pointer-events: none;
+}
+
+/* ---------- handwriting for every line on screen ---------- */
+
+#whisper, #loading-text, #card-prompt, #ending-line, .tag, .duty-notice, .chalk-line, #board-name, input {
+  font-family: var(--hand-zh);
+}
+
+html:lang(en) #whisper,
+html:lang(en) #loading-text,
+html:lang(en) #card-prompt,
+html:lang(en) #ending-line,
+html:lang(en) .tag,
+html:lang(en) .chalk-line,
+html:lang(en) input {
+  font-family: var(--hand-en);
+  font-style: normal;
+  letter-spacing: 0.02em;
+}
+
+html:lang(en) #whisper { font-size: 1.7rem; }
+html:lang(en) #loading-text, html:lang(en) #ending-line, html:lang(en) #card-prompt { font-size: 1.9rem; }
+html:lang(en) .tag { font-size: 1.45rem; }
+html:lang(en) input { font-size: 1.4rem; }
+#whisper { font-size: 1.4rem; }
+
+/* ---------- chalk on the board ---------- */
+
+.chalk-line, #board-name {
+  font-family: "LXGW WenKai TC", var(--hand-zh);
+  font-weight: 700;
+  color: rgba(244, 244, 236, 0.92);
+  text-shadow: none;
+  filter: url(#chalk);
+}
+
+html:lang(en) .chalk-line { font-family: var(--hand-en); font-weight: 600; }
+
+/* Before you choose: real writing, half wiped away by an eraser. */
+.chalk-line:not(.kept):not(.gone) {
+  opacity: 0.55;
+  -webkit-mask-image: repeating-linear-gradient(100deg, #000 0 14px, rgba(0, 0, 0, 0.18) 14px 26px, #000 26px 34px, rgba(0, 0, 0, 0.35) 34px 48px);
+  mask-image: repeating-linear-gradient(100deg, #000 0 14px, rgba(0, 0, 0, 0.18) 14px 26px, #000 26px 34px, rgba(0, 0, 0, 0.35) 34px 48px);
+}
+
+.chalk-line:not(.kept):not(.gone):not(:disabled):hover { opacity: 0.8; }
+.chalk-line.kept { opacity: 1; -webkit-mask-image: none; mask-image: none; }
+
+/* ---------- one language at a time ---------- */
+
+html:lang(zh-Hant) h1 .en { display: none; }
+html:lang(en) h1 .zh, html:lang(en) .seal { display: none; }
+
+html:lang(en) h1 .en {
+  margin: 0 -0.3em 0 0;
+  font-size: clamp(3.2rem, 12vw, 6rem);
+  letter-spacing: 0.3em;
+  line-height: 1;
+  color: #ebe8de;
+  text-shadow:
+    var(--gx) var(--gy) 0 rgba(255, 30, 60, 0.55),
+    calc(-1 * var(--gx)) calc(-1 * var(--gy)) 0 rgba(0, 210, 255, 0.45);
+  animation: tube 9s infinite;
+}
