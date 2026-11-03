@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Syntax
+        run: for f in server.mjs mock.mjs scripts/*.mjs public/*.js; do node --check "$f"; done
+      - name: Walk the whole game in mock mode (no key, no model calls)
+        run: node scripts/smoke.mjs
+      - name: No key or local spend file committed
+        run: |
+          ! git ls-files | grep -E '(^|/)\.env$|\.spend\.json$'

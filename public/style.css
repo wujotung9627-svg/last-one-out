@@ -621,10 +621,10 @@ html:lang(en) .chip { font: 1rem var(--hand-en); }
 
 /* Your name and red scores on the papers, the ranking sheet with you last. */
 #marks { position: absolute; inset: 0; z-index: 1; pointer-events: none; }
-.paper-mark { position: absolute; display: flex; justify-content: space-between; align-items: flex-start; padding: 6% 8%; transform: rotate(-3deg); mix-blend-mode: multiply; }
-.paper-name { font-family: var(--hand-zh); color: rgba(40, 40, 46, 0.85); white-space: nowrap; overflow: hidden; }
+.paper-mark { position: absolute; transform: rotate(-3deg); mix-blend-mode: multiply; }
+.paper-name { position: absolute; left: 8%; top: 12%; max-width: 64%; font-family: var(--hand-zh); color: rgba(40, 40, 46, 0.88); white-space: nowrap; overflow: hidden; }
 html:lang(en) .paper-name { font-family: var(--hand-en); }
-.paper-score { font: 700 2.4em var(--hand-en); line-height: 1; color: #c8141c; border: 0.08em solid #c8141c; border-radius: 50%; padding: 0.05em 0.25em; transform: rotate(-8deg); }
+.paper-score { position: absolute; right: 6%; top: 2%; font: 700 2.2em var(--hand-en); line-height: 1; color: #c8141c; border: 0.08em solid #c8141c; border-radius: 50%; padding: 0.05em 0.25em; transform: rotate(-8deg); }
 .ranking { position: absolute; display: grid; align-content: start; gap: 0; line-height: 1.2; padding: 3%; overflow: hidden; color: rgba(30, 30, 34, 0.8); mix-blend-mode: multiply; font-family: var(--hand-zh); }
 html:lang(en) .ranking { font-family: var(--hand-en); }
 .rank-title { font-weight: 700; text-align: center; }

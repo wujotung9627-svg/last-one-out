@@ -4,6 +4,7 @@
 import { createServer } from 'node:http';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { extname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MOCK_BOXES, MOCK_COMMENT, MOCK_DEALS, mockPhoto } from './mock.mjs';
@@ -96,13 +97,22 @@ function limiter(max) {
   };
   return (task) =>
     new Promise((resolve, reject) => {
-      queue.push({ task, resolve, reject });
+      queue.push({ task: AsyncLocalStorage.bind(task), resolve, reject }); // runs in its caller's context
       next();
     });
 }
-const imageSlot = limiter(Number(process.env.IMAGE_CONCURRENCY || 6));
+const imageSlot = limiter(Number(process.env.IMAGE_CONCURRENCY || 8));
+
+// Each background version of the next walk runs in its own context. Once the player
+// keeps a line, the other two are cancelled: their queued model calls never start.
+const job = new AsyncLocalStorage();
+class Cancelled extends Error {}
+const stopIfCancelled = () => {
+  if (job.getStore()?.cancelled) throw new Cancelled('cancelled');
+};
 
 async function callModel(path, body, attempt = 0) {
+  stopIfCancelled();
   assertBudget();
   const res = await fetch(`${API_BASE}${path}`, {
     method: 'POST',
@@ -381,6 +391,9 @@ const LIGHTS_OUT = [
 const DEPTH_EDIT =
   'Redraw this photo as a grayscale depth map: pure white for the nearest surfaces, fading smoothly to pure black for the farthest. Same framing and composition, no texture, no lines, no color.';
 const AI_DEPTH = process.env.AI_DEPTH !== 'off';
+// Asking Muse Spark whether each edit is visible costs ~15 s per photo; every photo now
+// changes on purpose, so the check is off unless asked for.
+const CHECK_EDITS = process.env.CHECK_EDITS === 'on';
 
 const DAYLIGHT_EDIT =
   'Same classroom, same camera position and angle, now in warm late-afternoon daylight: windows bright, sunlight falling across the desks, fluorescent tubes off, every chair back in its place. Keep every object exactly where it is.';
@@ -565,6 +578,13 @@ async function depthMap(photoId) {
   }
 }
 
+// How much of the smaller box lies inside the other (0 = apart, 1 = one inside the other).
+function overlap(a, b) {
+  const w = Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x));
+  const h = Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+  return (w * h) / Math.min(a.w * a.h, b.w * b.h);
+}
+
 // Large enough to click, and not a sliver at the edge of the frame.
 const clickable = (box) => box.w * box.h > 0.004 && box.w > 0.02;
 
@@ -578,9 +598,13 @@ async function sceneView(id, photoId) {
   const view = { id, photo: `/photos/${photoId}`, depth };
   keys.forEach((key, i) => {
     if (key === 'doors') view.doors = found[i].filter(clickable).slice(0, 5);
-    else if (key === 'papers') view.papers = found[i].slice(0, 3);
+    // Papers lie on desks: in the lower part of the photo and wider than tall.
+    else if (key === 'papers') view.papers = found[i].filter((b) => b.y + b.h / 2 > 0.45 && b.w > b.h * 0.8).slice(0, 3);
     else view[key] = found[i][0] ?? null;
   });
+  // SAM can call the cork board a chalkboard too; the chalkboard is the one that is not it.
+  const boards = found[keys.indexOf('board')] ?? [];
+  if (view.notice && boards.length) view.board = boards.find((b) => overlap(b, view.notice) < 0.3) ?? null;
   return view;
 }
 
@@ -627,7 +651,7 @@ async function editScene(id, previous, instruction) {
       return null;
     }
   }
-  if (!(await photoShows(photoId, used))) {
+  if (CHECK_EDITS && !(await photoShows(photoId, used))) {
     try {
       photoId = await savePhoto(await editImage(bytes, editPrompt(`Make this change clearly visible: ${used}`)));
     } catch (err) {
@@ -795,12 +819,15 @@ async function crowdFrames(classroomId) {
 }
 
 // Renders one chalk line's version of the next walk, photos, doors and scares included.
+// Scare and flicker frames start as soon as their photo exists, alongside depth and SAM.
 async function renderOption(school, loop, card) {
   const ids = LOOPS[loop];
   const changes = [...school.changes, card];
   const last = loop === LOOPS.length - 1;
   const photoIds = {};
   const views = {};
+  let flicker = Promise.resolve(null);
+  let scare = loop === 1 ? school.scare1 : Promise.resolve(null);
   await Promise.all(
     ids.map(async (id) => {
       const previous = school.photos[id];
@@ -812,22 +839,21 @@ async function renderOption(school, loop, card) {
         if (instruction) photoId = (await editScene(id, previous, instruction)) ?? previous;
       }
       photoIds[id] = photoId;
+      if (id === 'corridor') flicker = quiet(flickerFrame(photoId, loop));
+      if (id === 'classroom' && last) scare = quiet(crowdFrames(photoId));
       views[id] = photoId === previous && school.views[id] ? school.views[id] : await sceneView(id, photoId);
     }),
   );
-  const [flicker, scare] = await Promise.all([
-    flickerFrame(photoIds.corridor, loop),
-    loop === 1 ? school.scare1 : crowdFrames(photoIds.classroom),
-  ]);
+  const [figure, frames] = await Promise.all([flicker, scare]);
   const scenes = ids.map((id) => views[id]);
   let frame = null;
-  if (loop === 1 && scare) frame = { after: 'door', kind: 'teacher', photo: scare };
-  if (last && scare?.turned) {
-    frame = { after: 'classroom', kind: scare.seated ? 'turn' : 'dark', photo: scare.turned };
-    if (scare.seated) {
+  if (loop === 1 && frames) frame = { after: 'door', kind: 'teacher', photo: frames };
+  if (last && frames?.turned) {
+    frame = { after: 'classroom', kind: frames.seated ? 'turn' : 'dark', photo: frames.turned };
+    if (frames.seated) {
       // You walk into the full room; once they have turned, it is empty again.
       const i = ids.indexOf('classroom');
-      scenes[i] = { ...scenes[i], photo: scare.seated, after: scenes[i].photo };
+      scenes[i] = { ...scenes[i], photo: frames.seated, after: scenes[i].photo };
     }
   }
   return {
@@ -836,7 +862,7 @@ async function renderOption(school, loop, card) {
     walk: {
       index: loop,
       scenes,
-      flicker: flicker ? { scene: 'corridor', photo: flicker } : null,
+      flicker: figure ? { scene: 'corridor', photo: figure } : null,
       scare: frame,
     },
   };
@@ -846,8 +872,9 @@ async function renderOption(school, loop, card) {
 function prepareLoop(school) {
   const loop = school.changes.length + 1;
   const cards = quiet(dealCards(school, loop));
-  const options = [0, 1, 2].map((i) => quiet(cards.then((dealt) => renderOption(school, loop, dealt[i]))));
-  school.next = { loop, cards, options };
+  const contexts = [0, 1, 2].map(() => ({ cancelled: false }));
+  const options = [0, 1, 2].map((i) => quiet(cards.then((dealt) => job.run(contexts[i], () => renderOption(school, loop, dealt[i])))));
+  school.next = { loop, cards, options, contexts };
   return school.next;
 }
 
@@ -996,9 +1023,11 @@ const routes = {
     if (school.changes.length >= DRAWS) throw new HttpError(409, 'No lines left. Walk on.');
     return exclusive(school, async () => {
       let next = school.next ?? prepareLoop(school);
+      next.contexts.forEach((context, i) => (context.cancelled = i !== index)); // only the kept line is still needed
       let cards = await next.cards.catch(() => null);
       if (!cards) {
         next = prepareLoop(school); // the deal failed once; deal again
+        next.contexts.forEach((context, i) => (context.cancelled = i !== index));
         cards = await next.cards;
       }
       const option = await next.options[index].catch((err) => {

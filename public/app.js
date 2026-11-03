@@ -435,6 +435,7 @@ async function guarded(waitingText, task) {
 // The chime, then a voice from the speaker. The browser speaks it with a voice on
 // this device, so the player's name never leaves it.
 async function announce(text) {
+  if (!$('#walk-screen').hidden && $('#intro').hidden) say(text);
   state.audio?.speaker();
   await pause(2300);
   await voice.speak(text, state.lang);
@@ -530,7 +531,7 @@ function rattle(button) {
 }
 
 // The page writes the name itself; it is never sent to a model.
-const BLUR_BY_WALK = [6, 4, 3];
+const BLUR_BY_WALK = [2.4, 1.8, 1.4];
 
 function placeName(scene, sharp = false) {
   const label = $('#board-name');
@@ -590,11 +591,12 @@ function placeMarks(scene) {
   const scores = state.bible?.scores ?? [];
   const name = state.name || t('noName');
   const { h } = stageSize();
-  const papers = scene.id === 'office' || isEndingScene(scene) ? (scene.papers ?? []) : [];
+  const onDesk = (b) => b.y + b.h / 2 > 0.45 && b.w > b.h * 0.8; // not the blinds, not a poster
+  const papers = scene.id === 'office' || isEndingScene(scene) ? (scene.papers ?? []).filter(onDesk) : [];
   papers.slice(0, scores.length).forEach((paper, i) => {
     const mark = el('div', null, 'paper-mark');
     box(mark, paper);
-    const size = Math.max(7, paper.h * h * 0.16);
+    const size = Math.max(8, Math.min(paper.h * h * 0.16, (paper.w * stageSize().w * 0.6) / Math.max(4, [...name].length + 3)));
     const score = scores[i];
     const subject = state.lang === 'zh' ? score.subject : score.subject_en;
     mark.append(el('span', `${subject}　${name}`, 'paper-name'), el('span', String(score.score), 'paper-score'));
