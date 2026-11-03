@@ -87,7 +87,8 @@ async function callModel(path, body) {
   const data = await res.json().catch(() => null);
   if (!res.ok) {
     const kind = String(data?.error?.type ?? data?.error?.code ?? 'unknown').slice(0, 60);
-    console.error(`[model] ${path} ${body.model} -> HTTP ${res.status} (${kind})`);
+    const reason = String(data?.error?.message ?? '').replace(/\s+/g, ' ').slice(0, 200); // Meta's own wording, no request data
+    console.error(`[model] ${path} ${body.model} -> HTTP ${res.status} (${kind}) ${reason}`);
     throw new UpstreamError(res.status);
   }
   return data;
@@ -103,7 +104,11 @@ async function chat(messages, { effort = 'low', maxTokens = 3000 } = {}) {
   const price = PRICES[TEXT_MODEL] ?? FALLBACK_PRICE;
   const usage = data.usage ?? {};
   await addSpend(((usage.prompt_tokens ?? 0) * price.in + (usage.completion_tokens ?? 0) * price.out) / 1e6);
-  return data.choices?.[0]?.message?.content ?? '';
+  const choice = data.choices?.[0];
+  const content = choice?.message?.content ?? '';
+  // Muse Spark always reasons first; reasoning counts towards the limit and can use it all up.
+  if (!content.trim()) console.error(`[model] empty answer (finish: ${choice?.finish_reason ?? 'unknown'})`);
+  return content;
 }
 
 function imageBytes(data) {
@@ -239,9 +244,11 @@ async function photoShows(photoId, change) {
           ],
         },
       ],
-      { effort: 'low', maxTokens: 600 },
+      { effort: 'low', maxTokens: 4000 },
     );
-    return parseJson(text)?.shows !== false;
+    const verdict = parseJson(text);
+    if (!verdict) console.error('[check] no verdict; treating the change as shown');
+    return verdict?.shows !== false;
   } catch (err) {
     if (err.status === 402) throw err;
     console.error(`[check] ${err.message}`);
@@ -256,23 +263,23 @@ const HOUSE_STYLE = [
   'Not cinematic, not HDR, no dramatic color grading: an ordinary snapshot.',
   'An old but well-kept Taiwanese school at night, clean and in daily use, as if the students left ten minutes ago. Not abandoned, not ruined, no dust or decay.',
   'Nobody in the frame. No ghosts, no blood, no readable text, no flags, no statues, no portraits, no slogans, no religious objects.',
-  "A single child's bright red indoor slipper is the only saturated color.",
+  "The student on duty's red plastic bucket with a wet string mop in it is the only saturated color, and part of the floor is freshly mopped and still wet, as if the cleaning was left half done.",
 ].join(' ');
 
 const SCENES = [
   {
     id: 'corridor',
-    base: 'Camera about 40 cm above the floor, looking down a long open-air school corridor: terrazzo floor, pale green lower walls, iron window grilles on one side, a row of wooden classroom doors on the other. One-point perspective, symmetrical. Every fluorescent tube is on; outside is pitch black.',
+    base: 'Camera about 40 cm above the floor, looking down a long open-air school corridor: terrazzo floor, pale green lower walls, iron window grilles on one side, a row of wooden classroom doors on the other. One-point perspective, symmetrical. Every fluorescent tube is on; outside is pitch black. The red bucket and mop stand halfway down the corridor, and a wet mop trail on the terrazzo leads from them towards the camera.',
     find: 'door',
   },
   {
     id: 'door',
-    base: "Standing close to one classroom's front door: a wooden sliding door with a small glass window, a blank class sign above it, terrazzo floor, fluorescent light from the corridor ceiling.",
+    base: "Standing close to one classroom's front door: a wooden sliding door with a small glass window, a blank class sign above it, terrazzo floor, fluorescent light from the corridor ceiling. The red bucket stands right beside the door, the mop leaning against the wall.",
     find: 'door',
   },
   {
     id: 'classroom',
-    base: "Inside the empty classroom: rows of wooden desks and metal chairs, a green chalkboard with faint half-erased chalk marks, one chair pulled out, a lunch-box steamer by the wall with its small light on, a single fluorescent tube lit above the teacher's desk, the back door half open.",
+    base: "Inside the empty classroom: rows of wooden desks and metal chairs, a green chalkboard with faint half-erased chalk marks, one chair pulled out, a lunch-box steamer by the wall with its small light on, a single fluorescent tube lit above the teacher's desk, the back door half open. The red bucket and mop stand in the aisle near the teacher's desk, the floor around them still wet.",
     find: 'door',
     board: 'chalkboard',
   },
@@ -299,7 +306,7 @@ Only use what the player said plus what naturally goes with it. Keep it ordinary
 Reply with JSON only, details in English: {"corridor":"...","door":"...","classroom":"..."}`;
 
 const CARDS_SYSTEM = `You deal cards for "Last One Out", a quiet horror game. The player walks the same remembered Taiwanese school again and again: a corridor, a classroom door, a classroom. Before each walk they draw one card, and the card changes something in all three photos.
-Pace the drift by loop number. Loop 1 is barely noticeable (one light is off, a classroom number skips, the slipper has moved). Middle loops are unsettling (the corridor is much longer, every desk faces the back wall, it is bright daylight outside at night). The last loop is deeply wrong yet calm.
+Pace the drift by loop number. Loop 1 is barely noticeable (one light is off, a classroom number skips, the red bucket has moved, the wet mop trail is longer). Middle loops are unsettling (the corridor is much longer, every desk faces the back wall, it is bright daylight outside at night). The last loop is deeply wrong yet calm.
 Rules: never add people, faces, ghosts, blood, injury, death, religion, politics, flags, statues or readable text. Each change must be visible in a single photo and doable as an edit of an existing photo. Never repeat a previous change. The three cards must be very different from each other.
 Reply with JSON only:
 {"cards":[{"title":"at most 5 words, in the player's language","whisper":"one short eerie line in the player's language","edit":"precise English instruction for an image editor, describing only what changes","sound":"none|silence|echo|bell"}]}`;
@@ -448,10 +455,29 @@ async function changedWalk(school, card) {
   const results = await Promise.all(
     SCENES.map(async (scene) => {
       if (MOCK) return { scene, photoId: await savePhoto(mockPhoto(scene.id, { walk: changes.length, changes })) };
-      const { bytes } = await readPhoto(school.photos[scene.id]);
-      let photoId = await savePhoto(await editImage(bytes, editPrompt(card.edit)));
+      const previous = school.photos[scene.id];
+      const { bytes } = await readPhoto(previous);
+      let photoId;
+      try {
+        photoId = await savePhoto(await editImage(bytes, editPrompt(card.edit)));
+      } catch (err) {
+        if (!(err instanceof UpstreamError) || err.upstream !== 400) throw err;
+        // Refused edit: try the first sentence alone, and if that fails too keep the photo as it was.
+        try {
+          photoId = await savePhoto(await editImage(bytes, editPrompt(card.edit.split(/(?<=\.)\s/)[0])));
+        } catch (again) {
+          if (!(again instanceof UpstreamError) || again.upstream !== 400) throw again;
+          console.error(`[edit] ${scene.id}: refused twice, keeping the previous photo`);
+          return { scene, photoId: previous };
+        }
+      }
       if (!(await photoShows(photoId, card.edit))) {
-        photoId = await savePhoto(await editImage(bytes, editPrompt(`Make this change clearly visible: ${card.edit}`)));
+        try {
+          photoId = await savePhoto(await editImage(bytes, editPrompt(`Make this change clearly visible: ${card.edit}`)));
+        } catch (err) {
+          if (err.status === 402) throw err;
+          console.error(`[edit] ${scene.id}: retry failed, keeping the first edit`);
+        }
       }
       return { scene, photoId };
     }),
@@ -482,7 +508,7 @@ async function dealCards(school) {
         }),
       },
     ],
-    { effort: 'low', maxTokens: 3000 },
+    { effort: 'low', maxTokens: 6000 },
   );
   return parseDeal(text);
 }
@@ -505,9 +531,9 @@ async function teacherComment(school) {
         content: `Language: ${school.lang === 'zh' ? 'Traditional Chinese (Taiwan)' : 'English'}\nChanges: ${school.changes.map((c) => c.title).join('; ')}`,
       },
     ],
-    { effort: 'low', maxTokens: 800 },
+    { effort: 'low', maxTokens: 4000 },
   );
-  return cleanText(text, 200);
+  return cleanText(text, 200) || MOCK_COMMENT[school.lang]; // never leave the teacher's note blank
 }
 
 // ---------- routes ----------
@@ -549,7 +575,7 @@ const routes = {
               { role: 'system', content: DETAILS_SYSTEM },
               { role: 'user', content: memories.join('\n') },
             ],
-            { effort: 'low', maxTokens: 1500 },
+            { effort: 'low', maxTokens: 4000 },
           ),
         );
         for (const scene of SCENES) school.details[scene.id] = cleanText(details?.[scene.id], 400);

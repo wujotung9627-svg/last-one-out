@@ -33,7 +33,7 @@ browser (public/)                        server.mjs (Node, no packages)         
   contact book canvas (ending.js)        /api/ending  daylight photo + teacher's note
 ```
 
-- The house style (an early-2000s flash snapshot of a clean, ordinary school at night with one red slipper) is fixed in `server.mjs`, so every photo looks like it came from the same camera.
+- The house style (an early-2000s flash snapshot of a clean, ordinary school at night, with the student on duty's red bucket and mop and a half-mopped wet floor) is fixed in `server.mjs`, so every photo looks like it came from the same camera.
 - The 3D walk (`public/walk3d.js`) is plain WebGL2. A depth map from Muse Image is used only if it really looks like one (grey, with contrast, nearer at the bottom); otherwise the page treats the scene as a box seen from inside, which keeps straight lines straight. At rest the 3D surface lines up exactly with the photo. Without WebGL2, or with reduced motion, it falls back to a flat zoom.
 - Sound is synthesised in the browser: footsteps on terrazzo, the 60 Hz fluorescent hum of Taiwan's mains, the school bell. No recordings.
 - Without an API key the server runs in mock mode: labelled drawings stand in for photos, so the whole walk can be played offline.

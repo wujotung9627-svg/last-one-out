@@ -4,7 +4,7 @@
 export const MOCK_DEALS = [
   [
     { title: 'One light is off', whisper: 'Someone forgot to switch it back on.', edit: 'Turn off the third fluorescent tube.', sound: 'none' },
-    { title: 'The slipper moved', whisper: 'It was closer to the door before.', edit: 'Move the red slipper next to the classroom door.', sound: 'none' },
+    { title: 'The bucket moved', whisper: 'You left it by the door. Didn’t you?', edit: 'Move the red bucket and mop right next to the classroom door.', sound: 'none' },
     { title: 'Room numbers skip', whisper: 'Four, five, seven.', edit: 'Make the classroom numbers skip one.', sound: 'echo' },
   ],
   [
@@ -95,14 +95,16 @@ export function mockPhoto(sceneId, { walk, changes, daylight = false }) {
   const p = daylight
     ? { ceiling: '#e8e2cf', wall: '#c8d8c2', floor: '#bdb6a0', far: '#fff6d8', light: '#ffffff', line: '#7d7a6c', door: '#a0805c', desk: '#b08a5a' }
     : { ceiling: '#1c2420', wall: '#334a3e', floor: '#5a6055', far: '#050706', light: '#e9f5dc', line: '#1a201c', door: '#5b4632', desk: '#6e5235' };
-  const slipperX = 560 + ((walk * 170) % 520);
+  const bucketX = 560 + ((walk * 170) % 520);
   const labels = [
     `MOCK PHOTO · ${sceneId} · walk ${walk}${daylight ? ' · daylight' : ''}`,
     ...changes.map((c) => `+ ${c.title}`),
   ];
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">
     ${DRAW[sceneId](p)}
-    <ellipse cx="${slipperX}" cy="930" rx="56" ry="20" fill="#d0201c"/>
+    <ellipse cx="${bucketX - 150}" cy="960" rx="170" ry="26" fill="#ffffff" fill-opacity="0.12"/>
+    <polygon points="${bucketX - 40},880 ${bucketX + 40},880 ${bucketX + 30},950 ${bucketX - 30},950" fill="#d0201c"/>
+    <line x1="${bucketX + 10}" y1="890" x2="${bucketX + 60}" y2="700" stroke="#c9c2a8" stroke-width="8"/>
     <rect x="24" y="${H - 40 - labels.length * 34}" width="760" height="${labels.length * 34 + 24}" fill="#000" fill-opacity="0.55"/>
     ${labels.map((t, i) => `<text x="40" y="${H - 34 - (labels.length - 1 - i) * 34}" font-family="sans-serif" font-size="26" fill="#fff">${escape(t)}</text>`).join('')}
   </svg>`;
