@@ -19,6 +19,11 @@ export const MOCK_DEALS = [
   ],
 ];
 
+// Mock lines are English already, so the English subtitle is the same line.
+for (const deal of MOCK_DEALS) {
+  for (const card of deal) Object.assign(card, { title_en: card.title, whisper_en: card.whisper });
+}
+
 export const MOCK_COMMENT = {
   en: 'You stayed late again. Everything is still where you left it. Almost.',
   zh: '今天又留到很晚。東西都還在原來的位置，幾乎都在。',

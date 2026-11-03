@@ -29,6 +29,16 @@ const LINES = {
     alt_door: 'A classroom door',
     alt_classroom: 'The empty classroom',
     alt_daylight: 'The classroom in afternoon light',
+    eraseHint: 'Three lines on the board. Erase two. Keep one.',
+    tag: 'In Taiwan, the student on duty is the last one out.',
+    nameLabel: 'Your name',
+    nameHint: 'Stays on this device. It is never sent anywhere.',
+    memoriesLabel: 'Three things you remember about your school',
+    memory1: 'e.g. a banyan tree at the end of the corridor',
+    memory2: 'e.g. the teacher who never said my name',
+    memory3: 'e.g. the exam ranking pinned on the wall',
+    start: 'Start your duty',
+    headphones: 'Please wear headphones.',
   },
   zh: {
     remembering: '正在想起你的學校…',
@@ -49,6 +59,16 @@ const LINES = {
     alt_door: '教室的門',
     alt_classroom: '空無一人的教室',
     alt_daylight: '午後陽光裡的教室',
+    eraseHint: '黑板上有三行字。擦掉兩行，留下一行。',
+    tag: '在台灣，值日生是最後一個離開教室的人。',
+    nameLabel: '你的名字',
+    nameHint: '只留在這台裝置上，不會傳出去。',
+    memoriesLabel: '寫下三件你記得的學校的事',
+    memory1: '例：走廊盡頭有一棵大榕樹',
+    memory2: '例：從來不叫我名字的導師',
+    memory3: '例：貼在布告欄上的月考排名',
+    start: '開始值日',
+    headphones: '請戴上耳機體驗。',
   },
 };
 
@@ -63,6 +83,7 @@ const state = {
   ending: null,
   audio: null,
   busy: false,
+  pick: null, // the line kept on the chalkboard this walk: { index, promise, done, title }
 };
 
 const t = (key) => LINES[state.lang][key];
@@ -102,6 +123,115 @@ function loading(text) {
 function showError(message) {
   $('#error').textContent = message ?? '';
   $('#error').hidden = !message;
+}
+
+// ---------- atmosphere ----------
+
+// A line under the photo.
+function say(text) {
+  typeLine($('#whisper'), text);
+}
+
+// Every dealt line comes in the player's language and in English; show the chosen one.
+function cardText(card) {
+  return state.lang === 'en'
+    ? { title: card.title_en || card.title, whisper: card.whisper_en || card.whisper }
+    : { title: card.title, whisper: card.whisper };
+}
+
+// ---------- language ----------
+
+function storedLang() {
+  try {
+    return localStorage.getItem('last-one-out-lang');
+  } catch {
+    return null;
+  }
+}
+
+function applyLanguage(lang) {
+  state.lang = lang === 'zh' ? 'zh' : 'en';
+  document.documentElement.lang = state.lang === 'zh' ? 'zh-Hant' : 'en';
+  for (const node of document.querySelectorAll('[data-text]')) node.textContent = t(node.dataset.text);
+  for (const node of document.querySelectorAll('[data-placeholder]')) node.placeholder = t(node.dataset.placeholder);
+  ['#m1', '#m2', '#m3'].forEach((id, i) => $(id).setAttribute('aria-label', `${t('memoriesLabel')} ${i + 1}`));
+  for (const button of document.querySelectorAll('.lang-switch button')) {
+    button.setAttribute('aria-pressed', String(button.dataset.lang === state.lang));
+  }
+  if (replayRun) fillReplayMemories(replayRun);
+  try {
+    localStorage.setItem('last-one-out-lang', state.lang);
+  } catch {
+    // private mode: the choice just is not remembered
+  }
+}
+
+// Lines arrive one character at a time, like someone thinking of them.
+let typing = null;
+
+function typeLine(target, text) {
+  clearInterval(typing);
+  target.setAttribute('aria-label', text); // screen readers get the whole line at once
+  if (REDUCED_MOTION || !text) {
+    target.textContent = text;
+    return;
+  }
+  const chars = [...text];
+  let shown = 0;
+  target.textContent = '';
+  typing = setInterval(() => {
+    shown += 1;
+    target.textContent = chars.slice(0, shown).join('');
+    if (shown >= chars.length) clearInterval(typing);
+  }, 70);
+}
+
+// Film grain over the whole page, at a third of the screen's resolution.
+function startGrain() {
+  const canvas = $('#grain');
+  const g = canvas.getContext('2d');
+  let image = null;
+  const draw = () => {
+    const w = Math.max(1, Math.round(innerWidth / 3));
+    const h = Math.max(1, Math.round(innerHeight / 3));
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+      image = g.createImageData(w, h);
+    }
+    const px = image.data;
+    for (let i = 0; i < px.length; i += 4) {
+      const v = Math.random() * 255;
+      px[i] = px[i + 1] = px[i + 2] = v;
+      px[i + 3] = 255;
+    }
+    g.putImageData(image, 0, 0);
+  };
+  draw();
+  if (!REDUCED_MOTION) setInterval(draw, 90);
+}
+
+// Every so often the title slips: its red and cyan ghosts pull apart for a moment.
+function startTitleGlitch() {
+  if (REDUCED_MOTION) return;
+  const title = $('h1 .zh');
+  const slip = () => {
+    if (!$('#title-screen').hidden) {
+      const steps = 3 + Math.floor(Math.random() * 3);
+      for (let i = 0; i < steps; i++) {
+        setTimeout(() => {
+          title.style.setProperty('--gx', `${(Math.random() * 8 - 4).toFixed(1)}px`);
+          title.style.setProperty('--gy', `${(Math.random() * 2 - 1).toFixed(1)}px`);
+        }, i * 60);
+      }
+      setTimeout(() => {
+        title.style.setProperty('--gx', '0px');
+        title.style.setProperty('--gy', '0px');
+      }, steps * 60 + 40);
+    }
+    setTimeout(slip, 2500 + Math.random() * 5000);
+  };
+  setTimeout(slip, 1800);
 }
 
 // ---------- replay: a recorded walk that needs no server and no model calls ----------
@@ -165,17 +295,6 @@ async function api(path, body) {
   return data;
 }
 
-async function refreshStatus() {
-  if (REPLAY_SRC) return;
-  try {
-    const s = await api('/api/status');
-    $('#mode').hidden = !s.mock;
-    $('#budget').textContent = `About $${s.spentUsd.toFixed(2)} of $${s.capUsd} used`;
-  } catch {
-    $('#budget').textContent = '';
-  }
-}
-
 // Runs one step of the game, keeping double clicks out and errors visible.
 async function guarded(waitingText, task) {
   if (state.busy) return;
@@ -189,7 +308,6 @@ async function guarded(waitingText, task) {
   } finally {
     loading(null);
     state.busy = false;
-    refreshStatus();
   }
 }
 
@@ -200,14 +318,57 @@ function applySound(sound) {
   state.audio.silence(sound === 'silence');
   state.audio.echo(sound === 'echo' ? 0.75 : 0.3);
   if (sound === 'bell') state.audio.bell();
+  if (sound === 'ball') setTimeout(() => state.audio.ball(), 2500);
+  if (sound === 'laughter') setTimeout(() => state.audio.murmur(5), 3000);
+  if (sound === 'chalk') setTimeout(() => state.audio.chalk(1.6), 2000);
+  if (sound === 'chair') setTimeout(() => state.audio.chair(), 2200);
+  if (sound === 'papers') setTimeout(() => state.audio.papers(), 2400);
+  if (sound === 'speaker') setTimeout(() => state.audio.speaker(), 3000);
+  if (sound === 'water') [1800, 3100, 3900, 6200].forEach((ms) => setTimeout(() => state.audio.drip(), ms));
+}
+
+// Later walks are not quiet: a ball rolls out of nowhere, children play somewhere.
+let eventTimers = [];
+
+function scheduleEvents() {
+  eventTimers.forEach(clearTimeout);
+  eventTimers = [];
+  const index = state.walk?.index ?? 0;
+  const later = (ms, play) => eventTimers.push(setTimeout(() => !$('#walk-screen').hidden && play(), ms));
+  if (index >= 1 && Math.random() < 0.5) later(4000 + Math.random() * 6000, () => state.audio?.murmur(4));
+  if (index >= 2 && Math.random() < 0.6) later(3000 + Math.random() * 5000, () => state.audio?.ball());
+  // The bucket drips on every walk.
+  for (let ms = 2500; ms < 60000; ms += 5000 + Math.random() * 7000) later(ms, () => state.audio?.drip());
 }
 
 // ---------- the walk ----------
 
 const currentScene = () => state.walk.scenes[state.sceneIndex];
 
+// The choice happens on the chalkboard: the student on duty erases two lines and keeps one.
+const isChoiceScene = (scene) =>
+  scene.id === 'classroom' && Boolean(scene.board) && !state.last && state.walk.index < state.draws;
+
+// The last walk ends in the classroom, the moment your name on the board is clear.
+const isEndingScene = (scene) => scene.id === 'classroom' && state.last;
+let endingStarted = false;
+
 function placeHotspots(scene) {
   const layer = $('#hotspots');
+  if (isEndingScene(scene)) {
+    layer.replaceChildren();
+    if (!endingStarted) {
+      endingStarted = true;
+      state.audio?.chalk(1.4);
+      setTimeout(() => state.audio?.bell(), 1200);
+      setTimeout(() => finish(), 5200);
+    }
+    return;
+  }
+  if (isChoiceScene(scene) && !state.pick) {
+    layer.replaceChildren(); // the back door only opens once a line is kept
+    return;
+  }
   const spots = scene.doors.length ? scene.doors : [{ x: 0.3, y: 0.25, w: 0.4, h: 0.6, forward: true }];
   layer.replaceChildren(
     ...spots.map((spot) => {
@@ -244,12 +405,122 @@ function placeName(scene) {
   label.hidden = false;
 }
 
+const SCRIBBLES = ['～〜～〜～', '〜～〜～', '～〜～〜～〜'];
+
+// Chalk appears one stroke at a time.
+function chalkWrite(target, text) {
+  clearInterval(target.chalkTimer);
+  if (REDUCED_MOTION) {
+    target.textContent = text;
+    return;
+  }
+  const chars = [...text];
+  let shown = 0;
+  target.textContent = '';
+  target.chalkTimer = setInterval(() => {
+    shown += 1;
+    target.textContent = chars.slice(0, shown).join('');
+    if (shown >= chars.length) clearInterval(target.chalkTimer);
+  }, 110);
+}
+
+function placeChoices(scene) {
+  const layer = $('#board-choices');
+  if (!isChoiceScene(scene)) {
+    layer.replaceChildren();
+    layer.hidden = true;
+    return;
+  }
+  const board = scene.board;
+  const stageHeight = $('#stage').clientHeight;
+  const pick = state.pick;
+  layer.hidden = false;
+  layer.replaceChildren(
+    ...[0, 1, 2].map((i) => {
+      const line = document.createElement('button');
+      line.type = 'button';
+      line.className = 'chalk-line';
+      Object.assign(line.style, {
+        left: `${(board.x + board.w * 0.05) * 100}%`,
+        top: `${(board.y + board.h * (0.2 + i * 0.25)) * 100}%`,
+        maxWidth: `${board.w * 0.5 * 100}%`,
+        fontSize: `${Math.max(10, board.h * stageHeight * 0.13)}px`,
+      });
+      line.textContent = pick?.index === i && pick.title ? pick.title : SCRIBBLES[i];
+      if (pick) line.classList.add(pick.index === i ? 'kept' : 'gone');
+      line.disabled = Boolean(pick);
+      line.setAttribute('aria-label', state.lang === 'zh' ? `留下第 ${i + 1} 行` : `Keep line ${i + 1}`);
+      line.addEventListener('click', () => choose(i));
+      return line;
+    }),
+  );
+}
+
+// Keeping a line is the draw. The school starts changing while you walk to the back door.
+function choose(index) {
+  if (state.pick || state.busy) return;
+  const scene = currentScene();
+  const pick = { index, done: false, title: null };
+  state.pick = pick;
+  [...$('#board-choices').children].forEach((line, i) => {
+    line.disabled = true;
+    line.classList.add(i === index ? 'kept' : 'erased');
+  });
+  state.audio?.erase();
+  say(t('changing'));
+  placeHotspots(scene);
+  pick.promise = api('/api/draw', { schoolId: state.schoolId, index });
+  pick.promise.then(
+    (res) => {
+      if (state.pick !== pick) return;
+      const card = res.cards[res.picked];
+      pick.done = true;
+      pick.title = card.title;
+      const kept = $('#board-choices').children[index];
+      const words = cardText(card);
+      if (kept) chalkWrite(kept, words.title);
+      state.audio?.chalk(1.2);
+      say(words.whisper);
+    },
+    (err) => {
+      if (state.pick !== pick) return;
+      state.pick = null;
+      showError(err.message);
+      if (currentScene() === scene) {
+        placeChoices(scene);
+        placeHotspots(scene);
+        say(t('eraseHint'));
+      }
+    },
+  );
+}
+
+function walkBack() {
+  const pick = state.pick;
+  if (!pick) {
+    say(t('eraseHint'));
+    return;
+  }
+  state.audio?.creak(); // out through the back door
+  return guarded(pick.done ? '' : t('changing'), async () => {
+    const res = await pick.promise;
+    const card = res.cards[res.picked];
+    await beginWalk(res.walk, cardText(card).whisper, card.sound);
+  });
+}
+
 function render(scene) {
   const photo = $('#photo');
   photo.alt = t(`alt_${scene.id}`);
   placeHotspots(scene);
   placeName(scene);
+  placeChoices(scene);
+  if (isChoiceScene(scene) && !state.pick) say(t('eraseHint'));
 }
+
+// How far the space has started to bend: nothing on the first walk, strong by the last.
+const WARP_BY_WALK = [0, 0.35, 0.7, 1, 1.2];
+const warpNow = () => WARP_BY_WALK[Math.min(state.walk?.index ?? 0, WARP_BY_WALK.length - 1)];
 
 // From the third walk on, sometimes one more footstep follows yours.
 const followed = () => state.walk.index >= 2 && Math.random() < 0.5;
@@ -285,12 +556,14 @@ async function stepInto(scene) {
   const next = $('#photo-next');
   $('#hotspots').replaceChildren();
   $('#board-name').hidden = true;
+  $('#board-choices').hidden = true;
   const follow = followed();
+  if (scene.id === 'classroom') state.audio?.slideDoor(); // through the classroom's sliding door
   if (walker) {
     const from = currentScene();
     state.audio?.footsteps(3, follow);
     const walked = await walk3d(async () => {
-      await walker.walk(from, scene, WALK_MS);
+      await walker.walk(from, scene, WALK_MS, { warp: warpNow() });
       photo.src = scene.photo; // swap under the canvas so nothing flashes
       await photo.decode().catch(() => {});
     });
@@ -327,18 +600,21 @@ async function stepInto(scene) {
 async function beginWalk(walk, line, sound) {
   state.walk = walk;
   state.sceneIndex = 0;
+  state.pick = null;
+  $('#board-choices').hidden = true;
   applySound(sound);
   show('walk-screen');
-  $('#whisper').textContent = line ?? '';
+  say(line ?? '');
   const photo = $('#photo');
   photo.src = walk.scenes[0].photo;
   await photo.decode().catch(() => {});
   state.audio?.footsteps(4);
-  if (!(walker && (await walk3d(() => walker.arrive(walk.scenes[0], ARRIVE_MS))))) {
+  if (!(walker && (await walk3d(() => walker.arrive(walk.scenes[0], ARRIVE_MS, { warp: warpNow() }))))) {
     photo.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 1400, easing: 'ease-out' });
   }
   render(walk.scenes[0]);
   scheduleFlicker();
+  scheduleEvents();
 }
 
 async function advance() {
@@ -359,27 +635,64 @@ async function advance() {
     return;
   }
   if (state.last) return finish();
-  if (state.walk.index < state.draws) return openCards();
+  if (state.walk.index < state.draws) return currentScene().board ? walkBack() : openCards(); // cards only if no chalkboard was found
   return lastWalk();
 }
 
 // ---------- cards ----------
+
+// An old camera's orange date stamp: ’26 11 04
+function dateStamp() {
+  const d = new Date();
+  const two = (n) => String(n).padStart(2, '0');
+  return `’${two(d.getFullYear() % 100)} ${two(d.getMonth() + 1)} ${two(d.getDate())}`;
+}
+
+// Each card is a photo print lying face down.
+function photoCard(i) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'card';
+  button.setAttribute('aria-label', `${t('card')} ${i + 1}`);
+  const inner = document.createElement('div');
+  inner.className = 'card-inner';
+  const back = document.createElement('div');
+  back.className = 'card-face card-back';
+  back.append(el('span', '值日生'), el('span', dateStamp()));
+  back.children[0].className = 'pencil';
+  back.children[1].className = 'stamp';
+  const front = document.createElement('div');
+  front.className = 'card-face card-front';
+  inner.append(back, front);
+  button.append(inner);
+  button.addEventListener('click', () => draw(i));
+  return button;
+}
+
+// The drawn card develops into the new photo; the others stay undeveloped.
+function revealCard(button, card, photo) {
+  const front = button.querySelector('.card-front');
+  const picture = photo ? document.createElement('img') : document.createElement('div');
+  if (photo) {
+    picture.src = photo;
+    picture.alt = '';
+  } else {
+    picture.className = 'undeveloped';
+  }
+  const words = document.createElement('div');
+  words.className = 'words';
+  words.append(el('strong', card.title), el('span', card.whisper));
+  front.replaceChildren(picture, words);
+  button.classList.add('flipped');
+  button.setAttribute('aria-label', `${card.title}. ${card.whisper}`);
+}
 
 function openCards() {
   show('card-screen');
   showError('');
   $('#card-prompt').textContent = t('pick');
   $('#walk-on').hidden = true;
-  $('#cards').replaceChildren(
-    ...[0, 1, 2].map((i) => {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'card back';
-      button.setAttribute('aria-label', `${t('card')} ${i + 1}`);
-      button.addEventListener('click', () => draw(i));
-      return button;
-    }),
-  );
+  $('#cards').replaceChildren(...[0, 1, 2].map(photoCard));
 }
 
 function draw(index) {
@@ -389,19 +702,21 @@ function draw(index) {
       b.disabled = true;
       b.classList.toggle('chosen', i === index);
     });
+    buttons[index].classList.add('waiting');
     try {
       const res = await api('/api/draw', { schoolId: state.schoolId, index });
+      buttons[index].classList.remove('waiting');
       buttons.forEach((b, i) => {
-        b.classList.remove('back');
         b.classList.toggle('other', i !== index);
-        b.replaceChildren(el('strong', res.cards[i].title), el('span', res.cards[i].whisper));
+        if (i === index) revealCard(b, { ...res.cards[i], ...cardText(res.cards[i]) }, res.walk.scenes[0].photo); // the other two are never shown
       });
       const picked = res.cards[index];
       const walkOn = $('#walk-on');
       walkOn.textContent = t('walkOn');
       walkOn.hidden = false;
-      walkOn.onclick = () => beginWalk(res.walk, picked.whisper, picked.sound);
+      walkOn.onclick = () => beginWalk(res.walk, cardText(picked).whisper, picked.sound);
     } catch (err) {
+      buttons[index].classList.remove('waiting');
       buttons.forEach((b) => {
         b.disabled = false;
       });
@@ -414,7 +729,7 @@ function lastWalk() {
   return guarded(t('once'), async () => {
     const res = await api('/api/final', { schoolId: state.schoolId });
     state.last = true;
-    await beginWalk(res.walk, res.card.whisper, res.card.sound);
+    await beginWalk(res.walk, cardText(res.card).whisper, res.card.sound);
   });
 }
 
@@ -426,7 +741,7 @@ function renderBook() {
     month: 'long',
     day: 'numeric',
   });
-  return drawContactBook($('#book'), { ...state.ending, name: state.name, date }, $('#hide-name').checked);
+  return drawContactBook($('#book'), { ...state.ending, name: state.name, date, lang: state.lang }, $('#hide-name').checked);
 }
 
 function finish() {
@@ -467,12 +782,10 @@ $('#start-form').addEventListener('submit', (event) => {
   event.preventDefault();
   state.name = $('#name').value.trim();
   const memories = ['#m1', '#m2', '#m3'].map((id) => $(id).value.trim()).filter(Boolean);
-  state.lang = /[㐀-鿿]/.test(memories.join('')) ? 'zh' : 'en';
   state.audio ??= createAudio(); // must start from a click
   guarded(t('remembering'), async () => {
-    const res = await api('/api/school', { memories }); // the name is not sent
+    const res = await api('/api/school', { memories, lang: state.lang }); // the name is not sent
     state.schoolId = res.schoolId;
-    state.lang = res.lang;
     state.draws = res.draws;
     await beginWalk(res.walk, t('firstLine'), 'none');
   });
@@ -483,18 +796,27 @@ window.addEventListener('resize', () => {
 });
 
 // In the replay the memories are the recorded ones; only the name is the player's own.
+function fillReplayMemories(run) {
+  const memories = state.lang === 'en' && run.memories_en?.length ? run.memories_en : run.memories;
+  ['#m1', '#m2', '#m3'].forEach((id, i) => {
+    $(id).value = memories[i] ?? '';
+    $(id).readOnly = true;
+  });
+}
+
 async function prepareReplay() {
   try {
-    const run = await loadReplay();
-    ['#m1', '#m2', '#m3'].forEach((id, i) => {
-      $(id).value = run.memories[i] ?? '';
-      $(id).readOnly = true;
-    });
-    $('#budget').textContent = 'This page replays one recorded walk, so it makes no AI calls. Your name still stays in your browser.';
+    fillReplayMemories(await loadReplay());
   } catch (err) {
     showError(err.message);
   }
 }
 
+for (const button of document.querySelectorAll('.lang-switch button')) {
+  button.addEventListener('click', () => applyLanguage(button.dataset.lang));
+}
+
+startGrain();
+startTitleGlitch();
+applyLanguage(storedLang() ?? (navigator.language?.toLowerCase().startsWith('zh') ? 'zh' : 'en'));
 if (REPLAY_SRC) prepareReplay();
-else refreshStatus();

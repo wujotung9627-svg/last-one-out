@@ -4,26 +4,36 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Last One Out</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Courier+Prime&family=IM+Fell+English:ital@0;1&family=LXGW+WenKai+TC&family=Noto+Serif+TC:wght@400;700;900&display=swap">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <canvas id="grain" aria-hidden="true"></canvas>
   <main>
     <section id="title-screen" class="screen">
-      <h1><span class="zh">值日生</span> Last One Out</h1>
-      <p class="tag">In Taiwan, the student on duty is the last one out.</p>
+      <div class="lang-switch" role="group" aria-label="Language / 語言">
+        <button type="button" data-lang="zh" lang="zh-Hant">中文</button>
+        <button type="button" data-lang="en" lang="en">English</button>
+      </div>
+      <h1 aria-label="值日生, Last One Out">
+        <span class="zh" aria-hidden="true">值日生</span>
+        <span class="en" aria-hidden="true">LAST ONE <span class="drift">O</span>UT</span>
+      </h1>
+      <p class="tag" data-text="tag"></p>
       <form id="start-form">
-        <label for="name">Your name</label>
+        <label for="name" data-text="nameLabel"></label>
         <input id="name" maxlength="20" autocomplete="off" required>
-        <p class="hint">Stays in this browser. It is never sent anywhere.</p>
+        <p class="hint" data-text="nameHint"></p>
         <fieldset>
-          <legend>Three things you remember about your school</legend>
-          <input id="m1" maxlength="200" aria-label="First memory" placeholder="e.g. a banyan tree at the end of the corridor">
-          <input id="m2" maxlength="200" aria-label="Second memory" placeholder="e.g. our classroom was on the third floor">
-          <input id="m3" maxlength="200" aria-label="Third memory" placeholder="e.g. the toilets were always dark">
+          <legend data-text="memoriesLabel"></legend>
+          <input id="m1" maxlength="200" data-aria="memory1" data-placeholder="memory1">
+          <input id="m2" maxlength="200" data-aria="memory2" data-placeholder="memory2">
+          <input id="m3" maxlength="200" data-aria="memory3" data-placeholder="memory3">
         </fieldset>
-        <button type="submit">Go back</button>
-        <p class="hint">Sound on. Headphones help.</p>
-        <p class="meta"><span id="mode" hidden>Mock mode: add MODEL_API_KEY to .env</span> <span id="budget"></span></p>
+        <button type="submit" data-text="start"></button>
+        <p class="headphones" data-text="headphones"></p>
       </form>
     </section>
 
@@ -33,9 +43,10 @@
         <img id="photo-next" alt="" aria-hidden="true">
         <canvas id="gl" aria-hidden="true" hidden></canvas>
         <div id="board-name" hidden></div>
+        <div id="board-choices" hidden></div>
         <div id="hotspots"></div>
       </div>
-      <p id="whisper" aria-live="polite"></p>
+      <p id="whisper"></p>
     </section>
 
     <section id="card-screen" class="screen" hidden>
@@ -47,7 +58,7 @@
     <section id="ending-screen" class="screen" hidden>
       <img id="daylight" alt="">
       <p id="ending-line"></p>
-      <canvas id="book" width="1080" height="1350"></canvas>
+      <canvas id="book" width="1080" height="1450"></canvas>
       <div class="row">
         <label><input type="checkbox" id="hide-name"> <span id="hide-label"></span></label>
         <button id="download" type="button"></button>

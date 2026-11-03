@@ -279,7 +279,7 @@ const SCENES = [
   },
   {
     id: 'classroom',
-    base: "Inside the empty classroom: rows of wooden desks and metal chairs, a green chalkboard with faint half-erased chalk marks, one chair pulled out, a lunch-box steamer by the wall with its small light on, a single fluorescent tube lit above the teacher's desk, the back door half open. The red bucket and mop stand in the aisle near the teacher's desk, the floor around them still wet.",
+    base: "Inside the empty classroom: rows of typical Taiwanese school desks and chairs — light wooden desktops on steel-tube frames painted blue-green, an open shelf under each desktop for books, and matching chairs with a wooden seat and wooden backrest on a steel-tube frame (no folding chairs, no plastic chairs) — a green chalkboard with faint half-erased chalk marks, one chair pulled out, a lunch-box steamer by the wall with its small light on, a single fluorescent tube lit above the teacher's desk, the back door half open. The red bucket and mop stand in the aisle near the teacher's desk, the floor around them still wet.",
     find: 'door',
     board: 'chalkboard',
   },
@@ -287,9 +287,10 @@ const SCENES = [
 
 const FINAL_EDIT =
   'Lower the camera to just above the floor, about 10 cm high, so the desks, doors and walls tower overhead.';
+const FINAL_EN = { title_en: 'Small again', whisper_en: 'The desks were always this tall.' };
 const FINAL_CARD = {
-  en: { title: 'Small again', whisper: 'The desks were always this tall.', edit: FINAL_EDIT, sound: 'bell' },
-  zh: { title: '又變小了', whisper: '課桌本來就這麼高。', edit: FINAL_EDIT, sound: 'bell' },
+  en: { title: FINAL_EN.title_en, whisper: FINAL_EN.whisper_en, ...FINAL_EN, edit: FINAL_EDIT, sound: 'bell' },
+  zh: { title: '又變小了', whisper: '課桌本來就這麼高。', ...FINAL_EN, edit: FINAL_EDIT, sound: 'bell' },
 };
 
 // Muse Image redraws each photo as a depth map, which the page uses for the 3D walk.
@@ -303,19 +304,30 @@ const DAYLIGHT_EDIT =
 
 const DETAILS_SYSTEM = `The player shares up to three memories of their old school in Taiwan. Turn them into extra visual details for three night-time photos of that school: the corridor, a classroom door, and the classroom.
 Only use what the player said plus what naturally goes with it. Keep it ordinary and physical. Never add people, faces, readable text, flags, statues, portraits, slogans or religious objects. A memory that cannot be shown in a photo can be left out.
-Reply with JSON only, details in English: {"corridor":"...","door":"...","classroom":"..."}`;
+Also translate the player's memories into natural English, one per memory, in the same order.
+Reply with JSON only, details in English: {"corridor":"...","door":"...","classroom":"...","memories_en":["..."]}`;
 
-const CARDS_SYSTEM = `You deal cards for "Last One Out", a quiet horror game. The player walks the same remembered Taiwanese school again and again: a corridor, a classroom door, a classroom. Before each walk they draw one card, and the card changes something in all three photos.
-Pace the drift by loop number. Loop 1 is barely noticeable (one light is off, a classroom number skips, the red bucket has moved, the wet mop trail is longer). Middle loops are unsettling (the corridor is much longer, every desk faces the back wall, it is bright daylight outside at night). The last loop is deeply wrong yet calm.
-Rules: never add people, faces, ghosts, blood, injury, death, religion, politics, flags, statues or readable text. Each change must be visible in a single photo and doable as an edit of an existing photo. Never repeat a previous change. The three cards must be very different from each other.
+const CARDS_SYSTEM = `You deal the choices in "Last One Out", a quiet horror game set in a remembered Taiwanese school at night. The player, the student on duty, walks the same three places again and again: a corridor, a classroom door, a classroom. At the end of each walk three half-erased lines are on the chalkboard; the player keeps one, and that line changes something in all three photos.
+Escalate quickly, loop by loop:
+- Loop 1: small but clearly visible and wrong (one tube light is dark, the red bucket now stands somewhere it could not be, every classroom door is ajar, the wet mop trail runs up the wall).
+- Loop 2: the space itself distorts (the corridor is impossibly long, the same door repeats into the distance, the ceiling hangs far too low, the floor tilts, the room is mirrored, the windows are on the wrong side).
+- Loop 3: the people from the memory are back, but only as what they leave, and with them what hurt (a school uniform draped over every chair as if the class were sitting there, the shadows of a whole class on the floor at noon nap time with nobody casting them, a dark adult silhouette at the far end of the corridor with back turned, every chair turned to face the camera).
+Underneath, this school holds what hurt the student: a teacher's cold attention (being singled out, made to stand outside the classroom: one chair alone outside the door), being left out by classmates (every desk pushed away from one desk left alone in the middle, every chair turned away from it), and the weight of exams (stacks of test papers up to the ceiling, red pen marks everywhere, a wall covered in ranking sheets with no readable names). From loop 2 on, bring these in through objects and space, never through violence, insults, readable words or anything suggesting self-harm.
+The image editor refuses any picture of children or students, so classmates never appear in person: show them only through what they left behind (school uniforms draped over every chair, a school bag hanging on every desk, the shadows of a full class on the floor with nobody casting them, indoor shoes lined up under every desk). A teacher may appear only as a dark, out-of-focus adult silhouette far away with back turned; otherwise show the teacher through traces (red pen marks, a coat on the lectern). Never show a face. Never add ghosts, blood, injury, death, religion, politics, flags, statues or readable text. Use the player's memories when you can. Never repeat a previous change. The three lines must be very different from each other.
+Each line gives one edit instruction per photo. A change may touch one, two or all three photos; leave an instruction empty ("") for a photo that should stay exactly as it is, but make at least one photo change. Each instruction must be doable as an edit of that existing photo and visible in it.
 Reply with JSON only:
-{"cards":[{"title":"at most 5 words, in the player's language","whisper":"one short eerie line in the player's language","edit":"precise English instruction for an image editor, describing only what changes","sound":"none|silence|echo|bell"}]}`;
+{"cards":[{"title":"at most 6 words in the player's language","whisper":"one short eerie line in the player's language","title_en":"the title in natural English","whisper_en":"the line in natural English","edits":{"corridor":"precise English instruction for the corridor photo, or empty","door":"... for the classroom door photo, or empty","classroom":"... for the classroom photo, or empty"},"sound":"none|silence|echo|bell|ball|laughter|chalk|chair|papers|speaker|water"}]}
+Sounds (pick the one that fits the change): ball = a ball bounces and rolls down the corridor; laughter = children playing somewhere out of sight; chalk = chalk scratching on a board; chair = a chair dragged across the floor; papers = sheets of paper turned and shuffled; speaker = the school speaker crackles and chimes, then nobody speaks; water = water dripping; bell = the school bell; echo = every step echoes far too long; silence = all sound stops.`;
 
-const COMMENT_SYSTEM = `Write one short teacher's note for a student's contact book. The student went back to their old school and noticed the changes listed below.
-Be gentle and slightly uncanny. At most 30 words. No names, no death, no ghosts, no danger. Reply with the note only.`;
+const COMMENT_SYSTEM = `Write one short teacher's note for a student's contact book. The student went back to their old school, alone, and saw the changes listed below.
+Write as a teacher who finally noticed this student: warm, a little uncanny, and kind about whatever was hard back then. At most 30 words. No names, no death, no ghosts, no danger.
+Reply with JSON only: {"note":"the note in the requested language","note_en":"the same note in natural English"}`;
+
+const SOFTEN_SYSTEM = `This photo-edit instruction for a quiet horror game set in an empty Taiwanese school at night was refused by the image model's content policy.
+Rewrite it so it keeps the same unsettling idea but cannot be refused: no people of any age, no children, no students, no bodies, no faces; show absence through objects, shadows, light and space instead. Keep it one precise instruction describing only what changes. Reply with the new instruction only.`;
 
 const editPrompt = (change) =>
-  `${change} Keep everything else exactly the same: same camera position and angle, same lighting, same objects, same photographic style.`;
+  `${change} Keep everything else exactly the same: same camera position and angle, same lighting, same objects, same photographic style. If people appear, show them only from behind, far away or blurred by motion; never show a face.`;
 
 // ---------- helpers ----------
 
@@ -332,17 +344,25 @@ function parseJson(text) {
   }
 }
 
-const SOUNDS = new Set(['none', 'silence', 'echo', 'bell']);
+const SOUNDS = new Set(['none', 'silence', 'echo', 'bell', 'ball', 'laughter', 'chalk', 'chair', 'papers', 'speaker', 'water']);
 
 function parseDeal(text) {
   const cards = parseJson(text)?.cards;
-  if (!Array.isArray(cards) || cards.length < 3 || cards.slice(0, 3).some((c) => !c?.title || !c?.edit)) {
+  const editsOf = (c) =>
+    c?.edits && typeof c.edits === 'object'
+      ? Object.fromEntries(SCENES.map((scene) => [scene.id, cleanText(c.edits[scene.id], 500)]))
+      : null;
+  const usable = (c) => c?.title && (cleanText(c.edit, 500) || Object.values(editsOf(c) ?? {}).some(Boolean));
+  if (!Array.isArray(cards) || cards.length < 3 || !cards.slice(0, 3).every(usable)) {
     throw new HttpError(502, 'The cards came back garbled. Try again.');
   }
   return cards.slice(0, 3).map((c) => ({
     title: cleanText(c.title, 60),
     whisper: cleanText(c.whisper, 160),
-    edit: cleanText(c.edit, 400),
+    title_en: cleanText(c.title_en, 80) || cleanText(c.title, 60),
+    whisper_en: cleanText(c.whisper_en, 200) || cleanText(c.whisper, 160),
+    edits: editsOf(c),
+    edit: cleanText(c.edit, 500) || Object.values(editsOf(c) ?? {}).find(Boolean) || '',
     sound: SOUNDS.has(c.sound) ? c.sound : 'none',
   }));
 }
@@ -446,49 +466,79 @@ async function firstWalk(school) {
   );
   for (const { scene, photoId } of results) school.photos[scene.id] = photoId;
   school.first = { ...school.photos };
-  return { index: 0, scenes: await Promise.all(results.map(({ scene, photoId }) => sceneView(scene, photoId))) };
+  const scenes = await Promise.all(results.map(({ scene, photoId }) => sceneView(scene, photoId)));
+  school.views = Object.fromEntries(scenes.map((view) => [view.id, view]));
+  return { index: 0, scenes };
 }
 
-// Applies one card to every scene: edit the photo, check the change shows, retry once.
+// When the image model refuses an edit, Muse Spark rewrites it without people and
+// without anything else likely to be refused, keeping the same eerie idea.
+async function softenEdit(edit) {
+  const text = await chat(
+    [
+      { role: 'system', content: SOFTEN_SYSTEM },
+      { role: 'user', content: edit },
+    ],
+    { effort: 'low', maxTokens: 3000 },
+  );
+  return cleanText(text, 500);
+}
+
+// Edits one scene's photo for a card: refused -> rewritten and retried; not visible ->
+// pushed once more; still refused -> the photo stays as it was.
+async function editScene(scene, previous, instruction) {
+  const { bytes } = await readPhoto(previous);
+  let used = instruction;
+  let photoId;
+  try {
+    photoId = await savePhoto(await editImage(bytes, editPrompt(used)));
+  } catch (err) {
+    if (!(err instanceof UpstreamError) || err.upstream !== 400) throw err;
+    try {
+      used = (await softenEdit(instruction)) || instruction.split(/(?<=\.)\s/)[0];
+      console.error(`[edit] ${scene.id}: refused, retrying a rewritten edit`);
+      photoId = await savePhoto(await editImage(bytes, editPrompt(used)));
+    } catch (again) {
+      if (again.status === 402) throw again;
+      console.error(`[edit] ${scene.id}: refused twice, keeping the previous photo`);
+      return null;
+    }
+  }
+  if (!(await photoShows(photoId, used))) {
+    try {
+      photoId = await savePhoto(await editImage(bytes, editPrompt(`Make this change clearly visible: ${used}`)));
+    } catch (err) {
+      if (err.status === 402) throw err;
+      console.error(`[edit] ${scene.id}: retry failed, keeping the first edit`);
+    }
+  }
+  return photoId;
+}
+
+// Applies one card. Each scene has its own instruction; an empty one leaves that
+// photo (and its doors, chalkboard and depth) exactly as it was.
 async function changedWalk(school, card) {
   const changes = [...school.changes, card];
   const results = await Promise.all(
     SCENES.map(async (scene) => {
-      if (MOCK) return { scene, photoId: await savePhoto(mockPhoto(scene.id, { walk: changes.length, changes })) };
       const previous = school.photos[scene.id];
-      const { bytes } = await readPhoto(previous);
-      let photoId;
-      try {
-        photoId = await savePhoto(await editImage(bytes, editPrompt(card.edit)));
-      } catch (err) {
-        if (!(err instanceof UpstreamError) || err.upstream !== 400) throw err;
-        // Refused edit: try the first sentence alone, and if that fails too keep the photo as it was.
-        try {
-          photoId = await savePhoto(await editImage(bytes, editPrompt(card.edit.split(/(?<=\.)\s/)[0])));
-        } catch (again) {
-          if (!(again instanceof UpstreamError) || again.upstream !== 400) throw again;
-          console.error(`[edit] ${scene.id}: refused twice, keeping the previous photo`);
-          return { scene, photoId: previous };
-        }
-      }
-      if (!(await photoShows(photoId, card.edit))) {
-        try {
-          photoId = await savePhoto(await editImage(bytes, editPrompt(`Make this change clearly visible: ${card.edit}`)));
-        } catch (err) {
-          if (err.status === 402) throw err;
-          console.error(`[edit] ${scene.id}: retry failed, keeping the first edit`);
-        }
-      }
-      return { scene, photoId };
+      if (MOCK) return { scene, photoId: await savePhoto(mockPhoto(scene.id, { walk: changes.length, changes })) };
+      const instruction = card.edits ? card.edits[scene.id] : card.edit;
+      if (!instruction) return { scene, photoId: previous, kept: true };
+      const photoId = await editScene(scene, previous, instruction);
+      return photoId ? { scene, photoId } : { scene, photoId: previous, kept: true };
     }),
   );
-  const scenes = await Promise.all(results.map(({ scene, photoId }) => sceneView(scene, photoId)));
+  const scenes = await Promise.all(
+    results.map(({ scene, photoId, kept }) => (kept && school.views?.[scene.id] ? school.views[scene.id] : sceneView(scene, photoId))),
+  );
   return { photos: Object.fromEntries(results.map(({ scene, photoId }) => [scene.id, photoId])), scenes };
 }
 
 function commit(school, card, walk) {
   school.changes.push(card);
   school.photos = walk.photos;
+  school.views = Object.fromEntries(walk.scenes.map((view) => [view.id, view]));
   return { index: school.changes.length, scenes: walk.scenes };
 }
 
@@ -521,19 +571,24 @@ function dealFor(school) {
   return school.dealing;
 }
 
+// The teacher's note, in the player's language and in English. Never left blank.
 async function teacherComment(school) {
-  if (MOCK) return MOCK_COMMENT[school.lang];
+  const fallback = { comment: MOCK_COMMENT[school.lang], comment_en: MOCK_COMMENT.en };
+  if (MOCK) return fallback;
   const text = await chat(
     [
       { role: 'system', content: COMMENT_SYSTEM },
       {
         role: 'user',
-        content: `Language: ${school.lang === 'zh' ? 'Traditional Chinese (Taiwan)' : 'English'}\nChanges: ${school.changes.map((c) => c.title).join('; ')}`,
+        content: `Language: ${school.lang === 'zh' ? 'Traditional Chinese (Taiwan)' : 'English'}\nChanges: ${school.changes.map((c) => c.title_en || c.title).join('; ')}`,
       },
     ],
     { effort: 'low', maxTokens: 4000 },
   );
-  return cleanText(text, 200) || MOCK_COMMENT[school.lang]; // never leave the teacher's note blank
+  const note = parseJson(text);
+  const comment = cleanText(note?.note, 200);
+  if (!comment) return fallback;
+  return { comment, comment_en: cleanText(note?.note_en, 300) || comment };
 }
 
 // ---------- routes ----------
@@ -554,7 +609,7 @@ const routes = {
     const school = {
       id: newId(),
       memories,
-      lang: hasCjk(memories.join('')) ? 'zh' : 'en',
+      lang: ['zh', 'en'].includes(body.lang) ? body.lang : hasCjk(memories.join('')) ? 'zh' : 'en',
       details: {},
       photos: {},
       first: {},
@@ -579,6 +634,7 @@ const routes = {
           ),
         );
         for (const scene of SCENES) school.details[scene.id] = cleanText(details?.[scene.id], 400);
+        school.memoriesEn = (Array.isArray(details?.memories_en) ? details.memories_en : []).map((m) => cleanText(m, 300)).slice(0, 3);
       }
       const walk = await firstWalk(school);
       school.record.walks.push(walk);
@@ -640,8 +696,10 @@ const routes = {
           first: `/photos/${school.first.corridor}`,
           last: `/photos/${school.photos.corridor}`,
           memories: school.memories,
+          memories_en: school.memoriesEn ?? [],
           changes: school.changes.map((c) => c.title),
-          comment,
+          changes_en: school.changes.map((c) => c.title_en || c.title),
+          ...comment,
         };
         await saveRun(school).catch((err) => console.error(`[run] not saved: ${err.message}`));
       }
@@ -675,6 +733,7 @@ async function saveRun(school) {
   const run = {
     lang: school.lang,
     memories: school.memories,
+    memories_en: school.memoriesEn ?? [],
     walks,
     draws: school.record.draws,
     final: school.record.final,
@@ -687,7 +746,8 @@ async function saveRun(school) {
 // ---------- http ----------
 
 const APP_CSP =
-  "default-src 'self'; img-src 'self' blob: data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
+  "default-src 'self'; img-src 'self' blob: data:; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; " +
+  "base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
 const PHOTO_CSP = "default-src 'none'; style-src 'unsafe-inline'";
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png' };
 

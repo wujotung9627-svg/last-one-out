@@ -5,16 +5,40 @@
   --fg: #e6e4dc;
   --muted: #8d8b82;
   --accent: #d0201c;
-  --kai: "BiauKai", "DFKai-SB", "Kaiti TC", "STKaiti", "KaiTi", serif;
+  --paper: #ddd6c3;
+  --ink: #2a2a26;
+  --stamp: #ff7a1a;
+  /* Chinese: Noto Serif TC for printed text, LXGW WenKai TC for handwriting.
+     English: IM Fell English for lines, Courier Prime for labels. */
+  --kai: "LXGW WenKai TC", "BiauKai", "DFKai-SB", "Kaiti TC", serif;
+  --serif-zh: "Noto Serif TC", "PMingLiU", serif;
+  --fell: "IM Fell English", Georgia, serif;
+  --mono: "Courier Prime", "Courier New", monospace;
+  --gx: 0px; /* the title's red/cyan split, nudged by app.js */
+  --gy: 0px;
 }
 
 * { box-sizing: border-box; }
 
 body {
   margin: 0;
-  background: var(--bg);
+  background: radial-gradient(ellipse at 50% 35%, #0f1410 0%, var(--bg) 70%);
+  background-attachment: fixed;
   color: var(--fg);
-  font: 16px/1.5 system-ui, "PingFang TC", "Noto Sans TC", sans-serif;
+  font: 16px/1.5 var(--serif-zh);
+}
+
+html:lang(en) body { font-family: var(--fell); }
+
+/* Film grain over everything; drawn by app.js. Clicks pass straight through. */
+#grain {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  opacity: 0.07;
+  z-index: 20;
 }
 
 .screen {
@@ -31,31 +55,92 @@ body {
 
 /* ---------- title ---------- */
 
-h1 { margin: 0; font-size: 2rem; text-align: center; }
-h1 .zh { display: block; font-family: var(--kai); font-size: 3.5rem; letter-spacing: 0.2em; }
-.tag { margin: 0; color: var(--muted); text-align: center; }
+h1 { margin: 0 0 4px; text-align: center; font-weight: 400; }
+
+h1 .zh {
+  display: block;
+  font-family: var(--serif-zh);
+  font-weight: 900;
+  font-size: clamp(3.5rem, 14vw, 6.5rem);
+  letter-spacing: 0.3em;
+  margin-right: -0.3em; /* keep the spaced characters centred */
+  line-height: 1.1;
+  color: #ebe8de;
+  text-shadow:
+    var(--gx) var(--gy) 0 rgba(255, 30, 60, 0.55),
+    calc(-1 * var(--gx)) calc(-1 * var(--gy)) 0 rgba(0, 210, 255, 0.45),
+    0 0 18px rgba(200, 255, 220, 0.12);
+  animation: tube 9s infinite;
+}
+
+/* A fluorescent tube that is about to go. */
+@keyframes tube {
+  0%, 88%, 100% { opacity: 1; }
+  88.6% { opacity: 0.25; }
+  89.2% { opacity: 1; }
+  93% { opacity: 0.7; }
+  93.4% { opacity: 1; }
+}
+
+h1 .en {
+  display: block;
+  margin-top: 10px;
+  font-size: 0.85rem;
+  font-weight: 300;
+  letter-spacing: 0.8em;
+  margin-right: -0.8em;
+  font-family: var(--mono);
+  color: var(--muted);
+}
+
+/* One letter that is not always there. */
+h1 .drift { display: inline-block; animation: drift 11s infinite; }
+
+@keyframes drift {
+  0%, 60%, 100% { opacity: 1; transform: none; }
+  61% { opacity: 0; }
+  70% { opacity: 0; transform: translateY(-3px); }
+  71% { opacity: 1; transform: translateY(1px); }
+}
+
+.tag { margin: 0 0 12px; color: var(--muted); text-align: center; font-family: var(--kai); font-size: 1.05rem; letter-spacing: 0.05em; }
+html:lang(en) .tag { font-family: var(--fell); font-style: italic; }
+
+.lang-switch { position: absolute; top: 16px; right: 16px; display: flex; gap: 4px; }
+.lang-switch button { padding: 6px 10px; border-color: transparent; font: 0.85rem var(--mono); color: var(--muted); }
+.lang-switch button[aria-pressed="true"] { color: var(--fg); border-color: var(--border); }
+#title-screen { position: relative; }
+
+.headphones { margin: 6px 0 0; text-align: center; font: 0.85rem var(--mono); letter-spacing: 0.15em; color: #8f8b7e; }
+html:lang(zh-Hant) .headphones { font-family: var(--kai); letter-spacing: 0.2em; }
 
 form { display: grid; gap: 10px; width: min(100%, 520px); }
-label, legend { font-weight: 600; }
-fieldset { display: grid; gap: 8px; margin: 8px 0; padding: 0; border: 0; }
-.hint, .meta { margin: 0; color: var(--muted); font-size: 0.875rem; }
-#mode { color: var(--accent); margin-right: 8px; }
+label, legend { font: 0.75rem var(--mono); letter-spacing: 0.25em; text-transform: uppercase; color: var(--muted); }
+html:lang(zh-Hant) label, html:lang(zh-Hant) legend { font: 0.95rem var(--serif-zh); letter-spacing: 0.2em; }
+fieldset { display: grid; gap: 6px; margin: 10px 0 4px; padding: 0; border: 0; }
+.hint { margin: 0; color: #6c6a62; font-size: 0.8rem; }
 
+/* Inputs are lines in a contact book, written in brush hand. */
 input {
   width: 100%;
-  padding: 12px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
+  padding: 10px 2px;
+  border: 0;
+  border-bottom: 1px solid #343a33;
+  border-radius: 0;
+  background: transparent;
   color: var(--fg);
-  font: inherit;
+  font: 1.15rem var(--kai);
 }
+
+input:focus { outline: none; border-bottom-color: #a9a38f; }
+input::placeholder { color: #4d4f48; font-size: 0.95rem; }
+input[readonly] { color: #b8b4a6; }
 
 button {
   padding: 12px 18px;
   border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--surface);
+  border-radius: 2px;
+  background: transparent;
   color: var(--fg);
   font: inherit;
   cursor: pointer;
@@ -63,6 +148,19 @@ button {
 
 button:hover { border-color: var(--muted); }
 button:disabled { cursor: default; }
+
+#start-form button[type="submit"] {
+  margin-top: 8px;
+  letter-spacing: 0.5em;
+  text-transform: uppercase;
+  font: 0.9rem var(--mono);
+}
+
+html:lang(zh-Hant) #start-form button[type="submit"] { font: 1.1rem var(--serif-zh); letter-spacing: 0.6em; }
+
+#start-form button[type="submit"]:hover {
+  text-shadow: 1px 0 rgba(255, 30, 60, 0.6), -1px 0 rgba(0, 210, 255, 0.5);
+}
 
 /* ---------- the walk ---------- */
 
@@ -72,6 +170,16 @@ button:disabled { cursor: default; }
   aspect-ratio: 3 / 2;
   overflow: hidden;
   background: #000;
+  box-shadow: 0 0 60px rgba(0, 0, 0, 0.8);
+}
+
+/* A soft vignette, like a cheap lens. */
+#stage::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.45) 100%);
 }
 
 #photo, #photo-next {
@@ -87,7 +195,7 @@ button:disabled { cursor: default; }
 #gl { position: absolute; inset: 0; width: 100%; height: 100%; }
 #gl[hidden] { display: none; }
 
-#hotspots { position: absolute; inset: 0; }
+#hotspots { position: absolute; inset: 0; z-index: 1; }
 
 .hotspot {
   position: absolute;
@@ -111,58 +219,177 @@ button:disabled { cursor: default; }
   pointer-events: none;
 }
 
+html:lang(en) #whisper, html:lang(en) #ending-line, html:lang(en) #card-prompt, html:lang(en) #loading-text { font-family: var(--fell); font-style: italic; }
+
 #whisper {
   min-height: 1.5em;
   margin: 0;
-  color: var(--muted);
+  color: #a6a397;
   font-family: var(--kai);
-  font-size: 1.25rem;
+  font-size: 1.3rem;
+  letter-spacing: 0.08em;
   text-align: center;
 }
 
-/* ---------- cards ---------- */
+/* Three half-erased lines of chalk; keep one, erase two. */
+#board-choices { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+#board-choices[hidden] { display: none; }
 
-#card-prompt { margin: 0; font-family: var(--kai); font-size: 1.5rem; text-align: center; }
+.chalk-line {
+  position: absolute;
+  transform: translateY(-50%);
+  padding: 2px 6px;
+  border: 0;
+  background: transparent;
+  color: rgba(236, 236, 226, 0.55);
+  font-family: var(--kai);
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  letter-spacing: 0.05em;
+  text-shadow: 0 0 3px rgba(236, 236, 226, 0.35);
+  filter: blur(1.6px);
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.chalk-line:hover:not(:disabled) { color: rgba(236, 236, 226, 0.85); filter: blur(0.8px); }
+.chalk-line:focus-visible { outline: 1px dashed rgba(236, 236, 226, 0.5); }
+.chalk-line:disabled { cursor: default; }
+.chalk-line.kept { color: rgba(242, 242, 232, 0.9); filter: none; }
+.chalk-line.gone { opacity: 0; }
+.chalk-line.erased { animation: erase 0.8s ease-in forwards; }
+
+@keyframes erase {
+  40% { opacity: 0.6; filter: blur(3px); transform: translateY(-50%) translateX(6px) scaleX(1.05); }
+  100% { opacity: 0; filter: blur(8px); transform: translateY(-50%) translateX(18px) scaleX(1.2); }
+}
+
+/* ---------- cards: old photo prints, face down ---------- */
+
+#card-prompt {
+  margin: 0 0 8px;
+  font-family: var(--kai);
+  font-size: 1.5rem;
+  letter-spacing: 0.1em;
+  text-align: center;
+}
 
 #cards {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 200px));
-  gap: 16px;
-  width: min(100%, 680px);
+  grid-template-columns: repeat(3, minmax(0, 210px));
+  gap: 22px;
+  width: min(100%, 720px);
   justify-content: center;
 }
 
 .card {
-  display: grid;
-  align-content: center;
-  gap: 8px;
   aspect-ratio: 2 / 3;
-  padding: 12px;
-  text-align: center;
-  background: #e9e3d0;
-  color: #2a2a2a;
-  border: 1px solid #c9c1a8;
+  padding: 0;
+  border: 0;
+  background: none;
+  perspective: 900px;
 }
 
-.card.back {
+.card:nth-child(1) { transform: rotate(-2.5deg); }
+.card:nth-child(2) { transform: rotate(1deg) translateY(6px); }
+.card:nth-child(3) { transform: rotate(2deg); }
+
+.card-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform 0.9s cubic-bezier(0.3, 0.7, 0.2, 1);
+}
+
+.card:not(:disabled):hover .card-inner { transform: translateY(-8px) rotate(-1deg); }
+.card.flipped .card-inner { transform: rotateY(180deg); }
+
+.card-face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  border-radius: 3px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+}
+
+/* The back of a print: yellowed paper, a date stamp, a pencil note. */
+.card-back {
+  display: grid;
+  place-items: center;
   background:
-    repeating-linear-gradient(45deg, transparent 0 10px, rgba(255, 255, 255, 0.04) 10px 20px),
-    #1d2a22;
-  border-color: #33463a;
+    radial-gradient(circle at 28% 22%, rgba(255, 255, 255, 0.35), transparent 55%),
+    repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.025) 0 1px, transparent 1px 3px),
+    var(--paper);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), inset 0 0 36px rgba(120, 95, 50, 0.4);
 }
 
-.card.chosen { outline: 3px solid var(--accent); outline-offset: 3px; }
-.card.other { opacity: 0.45; }
-.card strong { font-family: var(--kai); font-size: 1.25rem; }
-.card span { font-size: 0.875rem; }
+.card-back .pencil {
+  font-family: var(--kai);
+  font-size: 1.6rem;
+  color: rgba(50, 50, 45, 0.35);
+  transform: rotate(-6deg);
+}
+
+.card-back .stamp {
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+  font: 0.85rem "Courier New", monospace;
+  letter-spacing: 0.12em;
+  color: var(--stamp);
+  text-shadow: 0 0 4px rgba(255, 120, 20, 0.6);
+}
+
+/* The front: a print with a white border. */
+.card-front {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 8px;
+  padding: 10px 10px 14px;
+  transform: rotateY(180deg);
+  background: #efeadb;
+  color: var(--ink);
+  text-align: center;
+}
+
+.card-front img {
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  object-fit: cover;
+  filter: contrast(1.05) saturate(0.85);
+}
+
+.card-front .undeveloped {
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  background: radial-gradient(circle at 50% 45%, #6b6a60, #2b2c28);
+  filter: blur(2px);
+}
+
+.card-front .words { display: grid; align-content: start; gap: 6px; }
+.card-front strong { font-family: var(--kai); font-size: 1.2rem; font-weight: 400; }
+.card-front span { font-size: 0.8rem; color: #5b5a52; }
+
+.card.other .card-front { filter: blur(0.6px) grayscale(0.6); opacity: 0.55; }
+.card.chosen .card-face { outline: 1px solid rgba(208, 32, 28, 0.7); outline-offset: 4px; }
+.card.waiting .card-inner { animation: tremble 0.16s infinite; }
+
+@keyframes tremble {
+  25% { transform: translate(0.6px, -0.4px); }
+  75% { transform: translate(-0.5px, 0.5px); }
+}
+
+#walk-on { letter-spacing: 0.3em; margin-top: 10px; }
 
 /* ---------- ending ---------- */
 
 #daylight { width: min(100%, 960px); }
 #ending-line { margin: 0; font-family: var(--kai); font-size: 1.5rem; text-align: center; }
-#book { width: min(100%, 540px); height: auto; }
+#book { width: min(100%, 960px); height: auto; }
 .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: center; }
-.row label { display: inline-flex; align-items: center; gap: 8px; font-weight: 400; }
+.row label { display: inline-flex; align-items: center; gap: 8px; font-size: 0.9rem; letter-spacing: normal; text-transform: none; color: var(--fg); }
 .row input[type="checkbox"] { width: auto; }
 
 /* ---------- overlays ---------- */
@@ -170,9 +397,11 @@ button:disabled { cursor: default; }
 #loading {
   position: fixed;
   inset: 0;
+  z-index: 10;
   display: grid;
   place-items: center;
-  background: rgba(0, 0, 0, 0.78);
+  background: rgba(0, 0, 0, 0.62);
+  backdrop-filter: blur(3px) grayscale(0.6);
 }
 
 #loading[hidden] { display: none; }
@@ -180,11 +409,12 @@ button:disabled { cursor: default; }
 #loading-text {
   font-family: var(--kai);
   font-size: 1.5rem;
+  letter-spacing: 0.15em;
   animation: breathe 2.4s ease-in-out infinite;
 }
 
 @keyframes breathe {
-  50% { opacity: 0.35; }
+  50% { opacity: 0.35; filter: blur(1px); }
 }
 
 #error {
@@ -192,14 +422,21 @@ button:disabled { cursor: default; }
   left: 16px;
   right: 16px;
   bottom: 16px;
+  z-index: 30;
   margin: 0;
   padding: 12px 16px;
   border: 1px solid #5c2a26;
-  border-radius: 6px;
+  border-radius: 2px;
   background: #2a1311;
   color: #f2c9c4;
 }
 
+@media (max-width: 560px) {
+  #cards { gap: 10px; }
+  .card-front strong { font-size: 1rem; }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  #loading-text { animation: none; }
+  #loading-text, h1 .zh, h1 .drift, .card.waiting .card-inner { animation: none; }
+  .card-inner { transition: none; }
 }

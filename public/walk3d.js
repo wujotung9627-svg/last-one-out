@@ -12,32 +12,45 @@ const WALK_DEPTH = 0.55; // how far one walk moves in; must stay below NEAR
 const DEPTH_W = 192;
 const DEPTH_H = 128;
 
+// uTan builds the surface from the photo; uView is the lens we look through. Widening
+// uView while walking in is a dolly zoom: the far end slides away as you approach it.
+// uWobble makes the walls breathe.
 const VERTEX = `#version 300 es
 in vec2 aUv;
 uniform sampler2D uDepth;
 uniform vec3 uCam;
 uniform vec2 uTan;
+uniform vec2 uView;
+uniform float uWobble;
+uniform float uTime;
 out vec2 vUv;
 void main() {
   vUv = aUv;
   float d = texture(uDepth, aUv).r;
   float dist = mix(${FAR.toFixed(1)}, ${NEAR.toFixed(1)}, d);
+  dist *= 1.0 + uWobble * 0.05 * sin(aUv.y * 14.0 + uTime * 3.1) * sin(aUv.x * 9.0 + uTime * 2.3);
   vec2 ndc = vec2(aUv.x * 2.0 - 1.0, 1.0 - aUv.y * 2.0);
   vec3 p = vec3(ndc * uTan, -1.0) * dist - uCam;
   float z = -p.z;
   const float n = 0.05;
   const float f = 20.0;
-  gl_Position = vec4(p.x / uTan.x, p.y / uTan.y, z * (f + n) / (f - n) - 2.0 * f * n / (f - n), z);
+  gl_Position = vec4(p.x / uView.x, p.y / uView.y, z * (f + n) / (f - n) - 2.0 * f * n / (f - n), z);
 }`;
 
+// uSplit pulls red and blue apart, like a cheap lens failing.
 const FRAGMENT = `#version 300 es
 precision mediump float;
 in vec2 vUv;
 uniform sampler2D uPhoto;
 uniform float uAlpha;
+uniform float uSplit;
 out vec4 color;
 void main() {
-  color = vec4(texture(uPhoto, vUv).rgb, uAlpha);
+  vec2 shift = (vUv - 0.5) * uSplit;
+  float r = texture(uPhoto, vUv + shift).r;
+  vec2 gb = texture(uPhoto, vUv).gb;
+  float b = texture(uPhoto, vUv - shift).b;
+  color = vec4(r, gb.x, b, uAlpha);
 }`;
 
 const ease = (k) => (k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2);
@@ -186,7 +199,17 @@ export function createWalker(canvas) {
   gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
 
   const uniform = (name) => gl.getUniformLocation(program, name);
-  const loc = { depth: uniform('uDepth'), photo: uniform('uPhoto'), cam: uniform('uCam'), tan: uniform('uTan'), alpha: uniform('uAlpha') };
+  const loc = {
+    depth: uniform('uDepth'),
+    photo: uniform('uPhoto'),
+    cam: uniform('uCam'),
+    tan: uniform('uTan'),
+    view: uniform('uView'),
+    wobble: uniform('uWobble'),
+    time: uniform('uTime'),
+    split: uniform('uSplit'),
+    alpha: uniform('uAlpha'),
+  };
 
   gl.enable(gl.DEPTH_TEST);
   gl.enable(gl.BLEND);
@@ -232,6 +255,7 @@ export function createWalker(canvas) {
     gl.viewport(0, 0, width, height);
   }
 
+  // Each layer: { entry, cam, alpha, lens (1 = normal, >1 = wider), wobble, split }.
   function frame(layers) {
     resize();
     gl.clearColor(0, 0, 0, 1);
@@ -239,7 +263,9 @@ export function createWalker(canvas) {
     gl.useProgram(program);
     gl.bindVertexArray(vao);
     gl.uniform2f(loc.tan, TAN_X, TAN_Y);
+    gl.uniform1f(loc.time, performance.now() / 1000);
     for (const layer of layers) {
+      const lens = layer.lens ?? 1;
       gl.clear(gl.DEPTH_BUFFER_BIT);
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, layer.entry.photo);
@@ -248,6 +274,9 @@ export function createWalker(canvas) {
       gl.bindTexture(gl.TEXTURE_2D, layer.entry.depth);
       gl.uniform1i(loc.depth, 1);
       gl.uniform3f(loc.cam, ...layer.cam);
+      gl.uniform2f(loc.view, TAN_X * lens, TAN_Y * lens);
+      gl.uniform1f(loc.wobble, layer.wobble ?? 0);
+      gl.uniform1f(loc.split, layer.split ?? 0);
       gl.uniform1f(loc.alpha, layer.alpha);
       gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_SHORT, 0);
     }
@@ -269,24 +298,56 @@ export function createWalker(canvas) {
   return {
     // Walk from one photo into the next: move into the first, then cross into the
     // second as it settles from slightly behind into place.
-    async walk(from, to, ms) {
+    // warp (0 = none, ~1 = strong) grows with every walk: the dolly zoom, the breathing
+    // walls and the lens split all get worse the longer you stay.
+    async walk(from, to, ms, { warp = 0 } = {}) {
       const [a, b] = await Promise.all([prepare(from), prepare(to)]);
       await animate(ms, (k) => {
         const go = ease(clamp01(k / 0.8));
         const bob = Math.sin(k * Math.PI * 6) * 0.012 * (1 - k); // three footsteps
-        const sway = Math.sin(k * Math.PI * 3) * 0.006;
+        const sway = Math.sin(k * Math.PI * 3) * 0.006 * (1 + warp);
         const cross = ease(clamp01((k - 0.55) / 0.45));
-        const layers = [{ entry: a, cam: [sway, bob, -WALK_DEPTH * go], alpha: 1 }];
-        if (cross > 0) layers.push({ entry: b, cam: [0, bob * 0.5, 0.3 * (1 - cross)], alpha: cross });
+        const peak = Math.sin(k * Math.PI);
+        const layers = [
+          {
+            entry: a,
+            cam: [sway, bob, -WALK_DEPTH * go],
+            alpha: 1,
+            lens: 1 + warp * 0.45 * go,
+            wobble: warp * peak,
+            split: warp * 0.012 * peak,
+          },
+        ];
+        if (cross > 0) {
+          layers.push({
+            entry: b,
+            cam: [0, bob * 0.5, 0.3 * (1 - cross)],
+            alpha: cross,
+            lens: 1 + warp * 0.25 * (1 - cross),
+            wobble: warp * (1 - cross) * 0.6,
+            split: warp * 0.008 * (1 - cross),
+          });
+        }
         frame(layers);
       });
       frame([{ entry: b, cam: [0, 0, 0], alpha: 1 }]);
     },
 
     // Arriving at the start of a walk: out of the dark, settling into place.
-    async arrive(scene, ms) {
+    async arrive(scene, ms, { warp = 0 } = {}) {
       const entry = await prepare(scene);
-      await animate(ms, (k) => frame([{ entry, cam: [0, 0, 0.35 * (1 - ease(k))], alpha: ease(k) }]));
+      await animate(ms, (k) =>
+        frame([
+          {
+            entry,
+            cam: [0, 0, 0.35 * (1 - ease(k))],
+            alpha: ease(k),
+            lens: 1 + warp * 0.3 * (1 - ease(k)),
+            wobble: warp * (1 - k) * 0.6,
+            split: warp * 0.01 * (1 - k),
+          },
+        ]),
+      );
     },
   };
 }
