@@ -3,40 +3,60 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Mutation Forge</title>
+  <title>Last One Out</title>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <header>
-    <h1>Mutation Forge</h1>
-    <p class="tag">Bring a game idea. Draw a mutation. Play something nobody has made before.</p>
-    <p class="meta"><span id="mode" hidden>Mock mode: add MODEL_API_KEY to .env</span> <span id="budget"></span></p>
-  </header>
-
   <main>
-    <form id="idea-form">
-      <label for="idea">Your game idea</label>
-      <textarea id="idea" rows="3" maxlength="500" required
-        placeholder="e.g. a runner where you dodge falling rocks"></textarea>
-      <button type="submit">Deal mutation cards</button>
-    </form>
-
-    <section id="deal" hidden>
-      <p id="nearest"></p>
-      <div id="cards"></div>
+    <section id="title-screen" class="screen">
+      <h1><span class="zh">值日生</span> Last One Out</h1>
+      <p class="tag">In Taiwan, the student on duty is the last one out.</p>
+      <form id="start-form">
+        <label for="name">Your name</label>
+        <input id="name" maxlength="20" autocomplete="off" required>
+        <p class="hint">Stays in this browser. It is never sent anywhere.</p>
+        <fieldset>
+          <legend>Three things you remember about your school</legend>
+          <input id="m1" maxlength="200" aria-label="First memory" placeholder="e.g. a banyan tree at the end of the corridor">
+          <input id="m2" maxlength="200" aria-label="Second memory" placeholder="e.g. our classroom was on the third floor">
+          <input id="m3" maxlength="200" aria-label="Third memory" placeholder="e.g. the toilets were always dark">
+        </fieldset>
+        <button type="submit">Go back</button>
+        <p class="hint">Sound on. Headphones help.</p>
+        <p class="meta"><span id="mode" hidden>Mock mode: add MODEL_API_KEY to .env</span> <span id="budget"></span></p>
+      </form>
     </section>
 
-    <p id="status" role="status"></p>
+    <section id="walk-screen" class="screen" hidden>
+      <div id="stage">
+        <img id="photo" alt="">
+        <img id="photo-next" alt="" aria-hidden="true">
+        <div id="board-name" hidden></div>
+        <div id="hotspots"></div>
+      </div>
+      <p id="whisper" aria-live="polite"></p>
+    </section>
 
-    <section id="play" hidden>
-      <iframe id="frame" title="Your game" sandbox="allow-scripts"></iframe>
+    <section id="card-screen" class="screen" hidden>
+      <p id="card-prompt"></p>
+      <div id="cards"></div>
+      <button id="walk-on" type="button" hidden></button>
+    </section>
+
+    <section id="ending-screen" class="screen" hidden>
+      <img id="daylight" alt="">
+      <p id="ending-line"></p>
+      <canvas id="book" width="1080" height="1350"></canvas>
       <div class="row">
-        <a id="open" target="_blank" rel="noopener">Open full screen</a>
-        <button id="again" type="button">Draw new cards</button>
+        <label><input type="checkbox" id="hide-name"> <span id="hide-label"></span></label>
+        <button id="download" type="button"></button>
+        <button id="again" type="button"></button>
       </div>
     </section>
-  </main>
 
+    <div id="loading" hidden><p id="loading-text"></p></div>
+    <p id="error" role="alert" hidden></p>
+  </main>
   <script type="module" src="/app.js"></script>
 </body>
 </html>

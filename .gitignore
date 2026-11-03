@@ -1,5 +1,5 @@
 node_modules/
 .env
 .spend.json
-games/
+photos/
 .DS_Store

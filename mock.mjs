@@ -1,59 +1,109 @@
-// Fixed answers used when there is no MODEL_API_KEY, so the UI can be built and tested offline.
+// Stand-ins used when there is no MODEL_API_KEY, so the whole walk can be built and
+// tested offline. Mock photos are plain drawings with a label saying what would change.
 
-export const MOCK_CARDS = {
-  nearest: 'Endless runner (mock)',
-  why_familiar: 'Mock mode: no API key yet, so these three cards are fixed examples.',
-  cards: [
-    {
-      title: 'Gravity on a tap',
-      rule: 'Tapping flips gravity instead of jumping.',
-      twist: 'The floor and ceiling both become paths.',
-    },
-    {
-      title: 'Sound is the map',
-      rule: 'The screen goes dark; obstacles only show while you hold a key, and holding costs points.',
-      twist: 'Every look is a bet.',
-    },
-    {
-      title: 'You are the level',
-      rule: 'You drop the obstacles and a runner tries to survive them.',
-      twist: 'Winning means making something just hard enough.',
-    },
+export const MOCK_DEALS = [
+  [
+    { title: 'One light is off', whisper: 'Someone forgot to switch it back on.', edit: 'Turn off the third fluorescent tube.', sound: 'none' },
+    { title: 'The slipper moved', whisper: 'It was closer to the door before.', edit: 'Move the red slipper next to the classroom door.', sound: 'none' },
+    { title: 'Room numbers skip', whisper: 'Four, five, seven.', edit: 'Make the classroom numbers skip one.', sound: 'echo' },
   ],
+  [
+    { title: 'The corridor is longer', whisper: 'It never took this long.', edit: 'Make the corridor twice as long.', sound: 'echo' },
+    { title: 'Desks face the wall', whisper: 'Everyone turned around.', edit: 'Turn every desk to face the back wall.', sound: 'silence' },
+    { title: 'Daylight outside', whisper: 'It is still night in here.', edit: 'Show bright daylight outside the windows.', sound: 'none' },
+  ],
+  [
+    { title: 'Every chair pulled out', whisper: 'As if they all stood up at once.', edit: 'Pull every chair out from its desk.', sound: 'silence' },
+    { title: 'The doors are taller', whisper: 'Or you are smaller.', edit: 'Make every door much taller.', sound: 'bell' },
+    { title: 'Water on the floor', whisper: 'Nobody mopped tonight.', edit: 'Add a thin sheet of still water on the floor.', sound: 'echo' },
+  ],
+];
+
+export const MOCK_COMMENT = {
+  en: 'You stayed late again. Everything is still where you left it. Almost.',
+  zh: '今天又留到很晚。東西都還在原來的位置，幾乎都在。',
 };
 
-export const MOCK_GAME = `<!doctype html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mock game</title>
-<style>html,body{margin:0;height:100%;background:#0d1117;color:#e6edf3;font:16px system-ui;overflow:hidden}canvas{display:block}#hud{position:fixed;top:8px;left:12px}</style>
-</head><body><div id="hud"></div><canvas id="c"></canvas><script>
-const c = document.getElementById('c'), x = c.getContext('2d'), hud = document.getElementById('hud');
-let W, H, p = null, shards = [], score = 0, best = 0, state = 'title', t = 0;
-function size() { W = c.width = innerWidth; H = c.height = innerHeight; }
-addEventListener('resize', size); size();
-function reset() { p = { x: W * 0.25, y: H / 2, vy: 0, g: 1 }; shards = []; score = 0; t = 0; state = 'play'; }
-function flip() { if (state !== 'play') return reset(); p.g *= -1; }
-addEventListener('keydown', (e) => { if (e.code === 'Space') flip(); });
-addEventListener('pointerdown', flip);
-function end() { state = 'over'; best = Math.max(best, score); }
-function step() {
-  t++; if (t % 40 === 0) shards.push({ x: W + 20, y: 40 + Math.random() * (H - 80), bad: Math.random() < 0.35 });
-  p.vy = (p.vy + 0.35 * p.g) * 0.98; p.y += p.vy;
-  if (p.y < 12 || p.y > H - 12) end();
-  const speed = 3 + score * 0.05;
-  for (const s of shards) {
-    s.x -= speed;
-    if (Math.hypot(s.x - p.x, s.y - p.y) < 20) { s.hit = true; if (s.bad) end(); else score++; }
-  }
-  shards = shards.filter((s) => !s.hit && s.x > -20);
+// Hotspot boxes as fractions of the photo, matching the drawings below.
+export const MOCK_BOXES = {
+  corridor: { door: [{ x: 0.06, y: 0.28, w: 0.12, h: 0.5 }] },
+  door: { door: [{ x: 0.33, y: 0.12, w: 0.34, h: 0.8 }] },
+  classroom: {
+    door: [{ x: 0.86, y: 0.3, w: 0.11, h: 0.55 }],
+    chalkboard: [{ x: 0.22, y: 0.16, w: 0.56, h: 0.24 }],
+  },
+};
+
+const W = 1536;
+const H = 1024;
+const box = (b) => ({ x: b.x * W, y: b.y * H, w: b.w * W, h: b.h * H });
+const escape = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+
+function corridor(p) {
+  const d = box(MOCK_BOXES.corridor.door[0]);
+  const lights = [0, 1, 2, 3, 4]
+    .map((i) => {
+      const s = 1 - i * 0.18;
+      return `<rect x="${768 - 90 * s}" y="${120 + i * 55}" width="${180 * s}" height="${14 * s}" fill="${p.light}"/>`;
+    })
+    .join('');
+  return `
+    <polygon points="0,0 1536,0 900,420 636,420" fill="${p.ceiling}"/>
+    <polygon points="0,1024 1536,1024 900,560 636,560" fill="${p.floor}"/>
+    <polygon points="0,0 636,420 636,560 0,1024" fill="${p.wall}"/>
+    <polygon points="1536,0 900,420 900,560 1536,1024" fill="${p.wall}"/>
+    ${[0, 1, 2, 3, 4, 5].map((i) => `<line x1="${1536 - i * 110}" y1="${60 + i * 60}" x2="${1536 - i * 110}" y2="${960 - i * 70}" stroke="${p.line}" stroke-width="6"/>`).join('')}
+    <rect x="636" y="420" width="264" height="140" fill="${p.far}"/>
+    ${lights}
+    <rect x="${d.x}" y="${d.y}" width="${d.w}" height="${d.h}" fill="${p.door}" stroke="${p.line}" stroke-width="4"/>
+    <rect x="${d.x + d.w * 0.6}" y="${d.y + 60}" width="${d.w * 0.25}" height="${d.h * 0.2}" fill="${p.far}"/>`;
 }
-function draw() {
-  x.fillStyle = '#0d1117'; x.fillRect(0, 0, W, H);
-  for (const s of shards) { x.fillStyle = s.bad ? '#f85149' : '#3fb950'; x.beginPath(); x.arc(s.x, s.y, 9, 0, 7); x.fill(); }
-  if (p) { x.fillStyle = '#e6edf3'; x.beginPath(); x.arc(p.x, p.y, 12, 0, 7); x.fill(); }
-  x.fillStyle = '#e6edf3'; x.font = '16px system-ui'; x.textAlign = 'center';
-  if (state === 'title') x.fillText('Mock game: tap or press Space to flip gravity. Green = points, red = out.', W / 2, H / 2);
-  if (state === 'over') x.fillText('Game over. Tap to play again.', W / 2, H / 2);
-  hud.textContent = 'Score ' + score + '   Best ' + best;
+
+function door(p) {
+  const d = box(MOCK_BOXES.door.door[0]);
+  return `
+    <rect width="${W}" height="${H}" fill="${p.wall}"/>
+    <rect y="900" width="${W}" height="124" fill="${p.floor}"/>
+    <rect x="${d.x}" y="${d.y}" width="${d.w}" height="${d.h}" fill="${p.door}" stroke="${p.line}" stroke-width="6"/>
+    <rect x="${d.x + d.w * 0.55}" y="${d.y + 90}" width="${d.w * 0.3}" height="${d.h * 0.22}" fill="${p.far}"/>
+    <rect x="${d.x + d.w * 0.25}" y="${d.y - 80}" width="${d.w * 0.5}" height="56" fill="${p.ceiling}" stroke="${p.line}" stroke-width="3"/>`;
 }
-(function loop() { if (state === 'play') step(); draw(); requestAnimationFrame(loop); })();
-</script></body></html>`;
+
+function classroom(p) {
+  const b = box(MOCK_BOXES.classroom.chalkboard[0]);
+  const d = box(MOCK_BOXES.classroom.door[0]);
+  const desks = [0, 1, 2]
+    .flatMap((row) =>
+      [0, 1, 2, 3].map((col) => {
+        const s = 1 + row * 0.35;
+        return `<rect x="${330 + col * 230 * s - row * 160}" y="${560 + row * 120}" width="${150 * s}" height="${60 * s}" fill="${p.desk}" stroke="${p.line}" stroke-width="3"/>`;
+      }),
+    )
+    .join('');
+  return `
+    <rect width="${W}" height="${H}" fill="${p.wall}"/>
+    <rect y="520" width="${W}" height="504" fill="${p.floor}"/>
+    <rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" fill="#2f4a3a" stroke="${p.line}" stroke-width="8"/>
+    <rect x="700" y="60" width="160" height="14" fill="${p.light}"/>
+    <rect x="${d.x}" y="${d.y}" width="${d.w}" height="${d.h}" fill="${p.door}" stroke="${p.line}" stroke-width="4"/>
+    ${desks}`;
+}
+
+const DRAW = { corridor, door, classroom };
+
+export function mockPhoto(sceneId, { walk, changes, daylight = false }) {
+  const p = daylight
+    ? { ceiling: '#e8e2cf', wall: '#c8d8c2', floor: '#bdb6a0', far: '#fff6d8', light: '#ffffff', line: '#7d7a6c', door: '#a0805c', desk: '#b08a5a' }
+    : { ceiling: '#1c2420', wall: '#334a3e', floor: '#5a6055', far: '#050706', light: '#e9f5dc', line: '#1a201c', door: '#5b4632', desk: '#6e5235' };
+  const slipperX = 560 + ((walk * 170) % 520);
+  const labels = [
+    `MOCK PHOTO · ${sceneId} · walk ${walk}${daylight ? ' · daylight' : ''}`,
+    ...changes.map((c) => `+ ${c.title}`),
+  ];
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">
+    ${DRAW[sceneId](p)}
+    <ellipse cx="${slipperX}" cy="930" rx="56" ry="20" fill="#d0201c"/>
+    <rect x="24" y="${H - 40 - labels.length * 34}" width="760" height="${labels.length * 34 + 24}" fill="#000" fill-opacity="0.55"/>
+    ${labels.map((t, i) => `<text x="40" y="${H - 34 - (labels.length - 1 - i) * 34}" font-family="sans-serif" font-size="26" fill="#fff">${escape(t)}</text>`).join('')}
+  </svg>`;
+}
