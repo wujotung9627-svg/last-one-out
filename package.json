@@ -1,9 +1,9 @@
 {
-  "name": "mutation-forge",
+  "name": "last-one-out",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Bring a game idea, draw a mutation card, play an original browser game a minute later.",
+  "description": "A quiet horror walk through the school you remember, a school that never existed.",
   "scripts": {
     "dev": "node --env-file-if-exists=.env --watch server.mjs",
     "start": "node --env-file-if-exists=.env server.mjs"

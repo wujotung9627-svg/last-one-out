@@ -1,4 +1,4 @@
-// Mutation Forge — local server.
+// Last One Out — local server.
 // Keeps the Meta Model API key on the server, serves the UI, and serves each
 // generated game from its own locked-down URL (sandboxed, no network access).
 import { createServer } from 'node:http';
@@ -312,5 +312,5 @@ createServer(async (req, res) => {
     sendJson(res, 500, { error: 'Something went wrong. Try again.' });
   }
 }).listen(PORT, '127.0.0.1', () => {
-  console.log(`Mutation Forge on http://127.0.0.1:${PORT}  (${MOCK ? 'mock mode — no MODEL_API_KEY' : TEXT_MODEL})`);
+  console.log(`Last One Out on http://127.0.0.1:${PORT}  (${MOCK ? 'mock mode — no MODEL_API_KEY' : TEXT_MODEL})`);
 });
