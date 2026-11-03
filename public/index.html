@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Mutation Forge</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header>
+    <h1>Mutation Forge</h1>
+    <p class="tag">Bring a game idea. Draw a mutation. Play something nobody has made before.</p>
+    <p class="meta"><span id="mode" hidden>Mock mode: add MODEL_API_KEY to .env</span> <span id="budget"></span></p>
+  </header>
+
+  <main>
+    <form id="idea-form">
+      <label for="idea">Your game idea</label>
+      <textarea id="idea" rows="3" maxlength="500" required
+        placeholder="e.g. a runner where you dodge falling rocks"></textarea>
+      <button type="submit">Deal mutation cards</button>
+    </form>
+
+    <section id="deal" hidden>
+      <p id="nearest"></p>
+      <div id="cards"></div>
+    </section>
+
+    <p id="status" role="status"></p>
+
+    <section id="play" hidden>
+      <iframe id="frame" title="Your game" sandbox="allow-scripts"></iframe>
+      <div class="row">
+        <a id="open" target="_blank" rel="noopener">Open full screen</a>
+        <button id="again" type="button">Draw new cards</button>
+      </div>
+    </section>
+  </main>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

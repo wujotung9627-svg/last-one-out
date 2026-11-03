@@ -1,0 +1,14 @@
+{
+  "name": "mutation-forge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Bring a game idea, draw a mutation card, play an original browser game a minute later.",
+  "scripts": {
+    "dev": "node --env-file-if-exists=.env --watch server.mjs",
+    "start": "node --env-file-if-exists=.env server.mjs"
+  },
+  "engines": {
+    "node": ">=22.9"
+  }
+}
