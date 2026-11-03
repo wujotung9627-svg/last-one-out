@@ -3,19 +3,14 @@
 
 export const MOCK_DEALS = [
   [
-    { title: 'One light is off', whisper: 'Someone forgot to switch it back on.', edit: 'Turn off the third fluorescent tube.', sound: 'none' },
-    { title: 'The bucket moved', whisper: 'You left it by the door. Didn’t you?', edit: 'Move the red bucket and mop right next to the classroom door.', sound: 'none' },
-    { title: 'Room numbers skip', whisper: 'Four, five, seven.', edit: 'Make the classroom numbers skip one.', sound: 'echo' },
+    { title: 'One light is off', whisper: 'Someone forgot to switch it back on.', edits: { corridor: 'Turn off the third fluorescent tube.', door: '', office: 'One desk lamp is on.' }, sound: 'none' },
+    { title: 'The bucket moved', whisper: 'You left it by the door. Didn’t you?', edits: { corridor: 'Move the red bucket next to a door.', door: 'Put the red bucket by the door.', office: '' }, sound: 'water' },
+    { title: 'The corridor is longer', whisper: 'It never took this long.', edits: { corridor: 'Make the corridor twice as long.', door: '', office: '' }, sound: 'echo' },
   ],
   [
-    { title: 'The corridor is longer', whisper: 'It never took this long.', edit: 'Make the corridor twice as long.', sound: 'echo' },
-    { title: 'Desks face the wall', whisper: 'Everyone turned around.', edit: 'Turn every desk to face the back wall.', sound: 'silence' },
-    { title: 'Daylight outside', whisper: 'It is still night in here.', edit: 'Show bright daylight outside the windows.', sound: 'none' },
-  ],
-  [
-    { title: 'Every chair pulled out', whisper: 'As if they all stood up at once.', edit: 'Pull every chair out from its desk.', sound: 'silence' },
-    { title: 'The doors are taller', whisper: 'Or you are smaller.', edit: 'Make every door much taller.', sound: 'bell' },
-    { title: 'Water on the floor', whisper: 'Nobody mopped tonight.', edit: 'Add a thin sheet of still water on the floor.', sound: 'echo' },
+    { title: 'Every chair pulled out', whisper: 'As if they all stood up at once.', edits: { corridor: '', door: '', classroom: 'Pull every chair out from its desk.' }, sound: 'chair' },
+    { title: 'Desks face the wall', whisper: 'Everyone turned around.', edits: { corridor: '', door: '', classroom: 'Turn every desk to face the back wall.' }, sound: 'silence' },
+    { title: 'Water on the floor', whisper: 'Nobody mopped tonight.', edits: { corridor: 'Add a thin sheet of still water on the floor.', door: '', classroom: '' }, sound: 'ball' },
   ],
 ];
 
@@ -36,6 +31,14 @@ export const MOCK_BOXES = {
   classroom: {
     door: [{ x: 0.86, y: 0.3, w: 0.11, h: 0.55 }],
     chalkboard: [{ x: 0.22, y: 0.16, w: 0.56, h: 0.24 }],
+    television: [{ x: 0.05, y: 0.06, w: 0.1, h: 0.1 }],
+    paper: [{ x: 0.42, y: 0.8, w: 0.14, h: 0.1 }],
+  },
+  office: {
+    door: [{ x: 0.86, y: 0.28, w: 0.11, h: 0.6 }],
+    chalkboard: [{ x: 0.08, y: 0.14, w: 0.3, h: 0.22 }],
+    paper: [{ x: 0.44, y: 0.74, w: 0.16, h: 0.12 }],
+    'bulletin board': [{ x: 0.5, y: 0.12, w: 0.24, h: 0.3 }],
   },
 };
 
@@ -94,9 +97,25 @@ function classroom(p) {
     ${desks}`;
 }
 
-const DRAW = { corridor, door, classroom };
+function office(p) {
+  const b = box(MOCK_BOXES.office.chalkboard[0]);
+  const n = box(MOCK_BOXES.office['bulletin board'][0]);
+  const paper = box(MOCK_BOXES.office.paper[0]);
+  const d = box(MOCK_BOXES.office.door[0]);
+  return `
+    <rect width="${W}" height="${H}" fill="${p.wall}"/>
+    <rect y="600" width="${W}" height="424" fill="${p.floor}"/>
+    <rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" fill="#2f4a3a" stroke="${p.line}" stroke-width="8"/>
+    <rect x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" fill="#a8845a" stroke="${p.line}" stroke-width="6"/>
+    <rect x="${n.x + n.w * 0.3}" y="${n.y + 10}" width="${n.w * 0.4}" height="${n.h - 20}" fill="#eeeadc"/>
+    <rect x="200" y="660" width="1100" height="120" fill="#7c8288" stroke="${p.line}" stroke-width="4"/>
+    <rect x="${paper.x}" y="${paper.y}" width="${paper.w}" height="${paper.h}" fill="#f2efe4"/>
+    <rect x="${d.x}" y="${d.y}" width="${d.w}" height="${d.h}" fill="${p.door}" stroke="${p.line}" stroke-width="4"/>`;
+}
 
-export function mockPhoto(sceneId, { walk, changes, daylight = false }) {
+const DRAW = { corridor, door, classroom, office };
+
+export function mockPhoto(sceneId, { walk, changes, daylight = false, note = '' }) {
   const p = daylight
     ? { ceiling: '#e8e2cf', wall: '#c8d8c2', floor: '#bdb6a0', far: '#fff6d8', light: '#ffffff', line: '#7d7a6c', door: '#a0805c', desk: '#b08a5a' }
     : { ceiling: '#1c2420', wall: '#334a3e', floor: '#5a6055', far: '#050706', light: '#e9f5dc', line: '#1a201c', door: '#5b4632', desk: '#6e5235' };
@@ -104,6 +123,7 @@ export function mockPhoto(sceneId, { walk, changes, daylight = false }) {
   const labels = [
     `MOCK PHOTO · ${sceneId} · walk ${walk}${daylight ? ' · daylight' : ''}`,
     ...changes.map((c) => `+ ${c.title}`),
+    ...(note ? [note] : []),
   ];
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">
     ${DRAW[sceneId](p)}

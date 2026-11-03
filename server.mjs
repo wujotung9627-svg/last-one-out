@@ -20,11 +20,11 @@ const API_BASE = 'https://api.meta.ai/v1';
 const TEXT_MODEL = process.env.TEXT_MODEL || 'muse-spark-1.3';
 const IMAGE_MODEL = 'muse-image-1.0';
 const SAM_MODEL = 'sam-3.1';
+const VOICE_MODEL = 'muse-voice-transcribe-1.0';
 const SPEND_CAP_USD = Number(process.env.SPEND_CAP_USD || 100);
 const MOCK = !API_KEY;
 
 const IMAGE_SIZE = '1536x1024'; // sets a 3:2 landscape ratio
-const DRAWS = 3; // cards drawn before the last walk
 
 // Prices from dev.meta.ai/docs/pricing-rate-limits (2026-11-03). Unknown text
 // models are priced like the most expensive one so the cap stays on the safe side.
@@ -36,6 +36,7 @@ const PRICES = {
 const FALLBACK_PRICE = PRICES['muse-wonder-1.0'];
 const IMAGE_PRICE = 0.01;
 const SAM_PRICE = 0.0025;
+const VOICE_PRICE_PER_HOUR = 0.18;
 
 class HttpError extends Error {
   constructor(status, message) {
@@ -75,7 +76,33 @@ function assertBudget() {
 
 const authHeader = () => ({ Authorization: `Bearer ${API_KEY}` });
 
-async function callModel(path, body) {
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Runs at most `max` tasks at once; the rest queue. The next walk renders three
+// versions in the background, so image calls are kept from all starting together.
+function limiter(max) {
+  let active = 0;
+  const queue = [];
+  const next = () => {
+    if (active >= max || !queue.length) return;
+    active += 1;
+    const { task, resolve, reject } = queue.shift();
+    task()
+      .then(resolve, reject)
+      .finally(() => {
+        active -= 1;
+        next();
+      });
+  };
+  return (task) =>
+    new Promise((resolve, reject) => {
+      queue.push({ task, resolve, reject });
+      next();
+    });
+}
+const imageSlot = limiter(Number(process.env.IMAGE_CONCURRENCY || 6));
+
+async function callModel(path, body, attempt = 0) {
   assertBudget();
   const res = await fetch(`${API_BASE}${path}`, {
     method: 'POST',
@@ -85,6 +112,11 @@ async function callModel(path, body) {
     signal: AbortSignal.timeout(240_000),
   });
   const data = await res.json().catch(() => null);
+  if ((res.status === 429 || res.status >= 500) && attempt < 2) {
+    console.error(`[model] ${path} ${body.model} -> HTTP ${res.status}, retrying`);
+    await wait(4000 * (attempt + 1));
+    return callModel(path, body, attempt + 1);
+  }
   if (!res.ok) {
     const kind = String(data?.error?.type ?? data?.error?.code ?? 'unknown').slice(0, 60);
     const reason = String(data?.error?.message ?? '').replace(/\s+/g, ' ').slice(0, 200); // Meta's own wording, no request data
@@ -118,24 +150,26 @@ function imageBytes(data) {
 }
 
 async function generateImage(prompt) {
-  const data = await callModel('/images/generations', {
+  const data = await imageSlot(() => callModel('/images/generations', {
     model: IMAGE_MODEL,
     prompt,
     n: 1,
     size: IMAGE_SIZE,
     output_format: 'jpeg',
-  });
+  }));
   await addSpend(IMAGE_PRICE);
   return imageBytes(data);
 }
 
 async function editImage(bytes, prompt) {
-  const data = await callModel('/images/edits', {
-    model: IMAGE_MODEL,
-    prompt,
-    n: 1,
-    images: [{ image_url: dataUrl(bytes) }],
-  });
+  const data = await imageSlot(() =>
+    callModel('/images/edits', {
+      model: IMAGE_MODEL,
+      prompt,
+      n: 1,
+      images: [{ image_url: dataUrl(bytes) }],
+    }),
+  );
   await addSpend(IMAGE_PRICE);
   return imageBytes(data);
 }
@@ -261,37 +295,65 @@ async function photoShows(photoId, change) {
 const HOUSE_STYLE = [
   'Photograph taken with an early-2000s compact digital camera and its on-camera flash: flash falloff, slightly overexposed near the lens, sensor noise, mild JPEG compression, faint green cast from fluorescent tubes.',
   'Not cinematic, not HDR, no dramatic color grading: an ordinary snapshot.',
-  'An old but well-kept Taiwanese school at night, clean and in daily use, as if the students left ten minutes ago. Not abandoned, not ruined, no dust or decay.',
+  'An old but well-kept Taiwanese school at night, clean and in daily use, as if everyone left ten minutes ago. Not abandoned, not ruined, no dust or decay.',
   'Nobody in the frame. No ghosts, no blood, no readable text, no logos, no flags, no statues, no portraits, no slogans, no religious objects.',
   'Part of the floor is freshly mopped and still wet, as if the cleaning was left half done.',
 ].join(' ');
 
-const SCENES = [
-  {
-    id: 'corridor',
+// What SAM 3.1 looks for in each photo. doors are what you click; board is where the
+// choice is made and your name appears; papers and notice carry your scores and rank.
+const SCENES = {
+  corridor: {
     base: 'Camera about 40 cm above the floor, looking down a long open-air school corridor: terrazzo floor, pale green lower walls, iron window grilles on one side with a long terrazzo hand-wash sink and a row of metal taps beneath them, a row of wooden classroom doors on the other. One-point perspective, symmetrical. Every fluorescent tube is on; outside is pitch black. A faded, slightly worn red plastic bucket with a string mop stands against the wall to one side, half in shadow and not in the centre of the frame; a wet mop trail on the terrazzo runs down the corridor.',
-    find: 'door',
+    concepts: { doors: 'door' },
   },
-  {
-    id: 'door',
+  door: {
     base: "Standing close to one classroom's front door: a wooden sliding door with a small glass window, a blank wooden class sign sticking out above the doorway, a low wooden shoe cabinet beside the door with pairs of students' white sneakers and canvas shoes in its cubbies, terrazzo floor, fluorescent light from the corridor ceiling. The floor in front of the door is still wet from mopping; no bucket here.",
-    find: 'door',
+    concepts: { doors: 'door' },
   },
-  {
-    id: 'classroom',
+  classroom: {
     base: "Inside the empty classroom of an old Taiwanese school: rows of old-style school desks made entirely of dark reddish-brown varnished wood, each with a closed wooden box front under the desktop where books are kept, and matching all-wood chairs with slatted backrests (no metal frames, no folding chairs, no plastic chairs); ceiling fans hanging still, an old CRT television on a wall bracket in a top corner, a small wall speaker, a dark green chalkboard with faint half-erased chalk marks and a narrow ruled column at its right edge for the date and the student on duty (left blank), chalk stubs and two felt erasers on the chalk ledge, a raised wooden platform with the teacher's wooden desk, a row of wooden cubby lockers along the back wall, one chair pulled out, and on a low cabinet at the back a classic cream-white round electric rice cooker with an aluminium dome lid, a black knob, two metal side handles and a black front switch with its small orange light on (no logo, no text), a single fluorescent tube lit above the teacher's desk, the back door half open. At the back, a metal cleaning cabinet stands open with brooms and a string mop leaning beside it, and part of the floor is still wet.",
-    find: 'door',
-    board: 'chalkboard',
+    concepts: { doors: 'door', board: 'chalkboard', tv: 'television', papers: 'paper' },
   },
-];
-
-const FINAL_EDIT =
-  'Lower the camera to just above the floor, about 10 cm high, so the desks, doors and walls tower overhead.';
-const FINAL_EN = { title_en: 'Small again', whisper_en: 'The desks were always this tall.' };
-const FINAL_CARD = {
-  en: { title: FINAL_EN.title_en, whisper: FINAL_EN.whisper_en, ...FINAL_EN, edit: FINAL_EDIT, sound: 'bell' },
-  zh: { title: '又變小了', whisper: '課桌本來就這麼高。', ...FINAL_EN, edit: FINAL_EDIT, sound: 'bell' },
+  office: {
+    base: "Inside the teachers' office of an old Taiwanese school at night: grey metal teachers' desks pushed together in facing pairs, each with a sheet of glass over a green desk mat, stacks of graded exam papers with red pen marks, red pens in a mug, a thermos flask and a tea cup with a lid, wooden filing cabinets, venetian blinds, an old round wall clock, a small dark green chalkboard on the wall with faint half-erased chalk marks, a cork bulletin board with one long sheet of paper pinned in its centre (a class ranking list in tiny unreadable handwriting). Most fluorescent tubes are off; one desk lamp is on, and on the desk nearest the camera a single exam paper lies alone in its light, a red score circled at the top. The wooden door behind the camera is ajar.",
+    concepts: { doors: 'door', board: 'chalkboard', papers: 'paper', notice: 'bulletin board' },
+  },
 };
+
+// The three walks. Each chalkboard choice decides how the next walk has changed.
+const LOOPS = [
+  ['corridor', 'door', 'classroom'],
+  ['corridor', 'door', 'office'],
+  ['corridor', 'door', 'classroom'],
+];
+const DRAWS = LOOPS.length - 1;
+
+const KEEP =
+  'Keep everything else exactly the same: same camera position and angle, same lighting, same objects, same photographic style.';
+
+const FINAL_CLASSROOM =
+  'Also lower the camera to just above the floor, about 10 cm high and looking slightly up, so the desks, chairs and chalkboard tower overhead. On the desk nearest the camera lies one exam paper covered in red pen marks. The narrow column at the right edge of the chalkboard stays clearly visible.';
+
+// The creatures are near-human and dressed as people from the school, and never have a face.
+const TEACHER_CLOTHES = 'a beige knitted cardigan over a pale shirt, dark slacks, black leather shoes';
+const teacherCreature = (clothes) =>
+  `a tall, too-thin humanoid figure dressed like a homeroom teacher (${clothes || TEACHER_CLOTHES}), its neck a little too long and its head tilted at a wrong angle; where the face should be there is only a smooth, blank, pale oval like unpainted plaster, with no eyes, no nose and no mouth`;
+const PAPER_HEAD =
+  'one stiff humanoid figure in a white short-sleeved Taiwanese school shirt and navy trousers, its head entirely wrapped in crumpled exam papers covered in red pen marks like a tight paper mask, no face visible, shoulders uneven';
+
+const SCARE_TEACHER = (clothes) =>
+  `Add ${teacherCreature(clothes)}. It stands very close to the camera, about one and a half metres away in the middle of the corridor, facing the camera and filling much of the frame, lit harshly by the camera flash. ${KEEP}`;
+const FLICKER_FIGURE = [
+  null,
+  `Add ${PAPER_HEAD}, standing far away at the very end of the corridor, small in the frame and easy to miss. ${KEEP}`,
+  `Add ${PAPER_HEAD}, standing halfway down the corridor, facing the camera. ${KEEP}`,
+];
+const LIGHTS_OUT = [
+  `All the lights are off; only the camera flash lights the room, which falls into darkness a few metres away. Every chair has been turned to face the camera, a white school shirt hanging over the backrest of each. In the dark between the desks stands ${PAPER_HEAD}, facing the camera. ${KEEP}`,
+  `All the lights are off; only the camera flash lights the room, which falls into darkness a few metres away. Every chair has been turned to face the camera. At the front of the room stands ${teacherCreature()}, facing the camera. ${KEEP}`,
+  `All the lights are off; only the camera flash lights the room. Every chair has been turned to face the camera. ${KEEP}`,
+];
 
 // Muse Image redraws each photo as a depth map, which the page uses for the 3D walk.
 // The page checks it really looks like one and otherwise guesses depth itself.
@@ -300,35 +362,44 @@ const DEPTH_EDIT =
 const AI_DEPTH = process.env.AI_DEPTH !== 'off';
 
 const DAYLIGHT_EDIT =
-  'Same classroom, same camera position and angle, now in warm late-afternoon daylight: windows bright, sunlight falling across the desks, fluorescent tubes off. Keep every object exactly where it is.';
+  'Same classroom, same camera position and angle, now in warm late-afternoon daylight: windows bright, sunlight falling across the desks, fluorescent tubes off, every chair back in its place. Keep every object exactly where it is.';
 
-const DETAILS_SYSTEM = `The player shares up to three memories of their old school in Taiwan. Turn them into extra visual details for three night-time photos of that school: the corridor, a classroom door, and the classroom.
-Only use what the player said plus what naturally goes with it. Keep it ordinary and physical. Never add people, faces, readable text, flags, statues, portraits, slogans or religious objects. A memory that cannot be shown in a photo can be left out.
-Also translate the player's memories into natural English, one per memory, in the same order.
-Reply with JSON only, details in English: {"corridor":"...","door":"...","classroom":"...","memories_en":["..."]}`;
-
-const CARDS_SYSTEM = `You deal the choices in "Last One Out", a quiet horror game set in a remembered Taiwanese school at night. The player, the student on duty, walks the same three places again and again: a corridor, a classroom door, a classroom. At the end of each walk three half-erased lines are on the chalkboard; the player keeps one, and that line changes something in all three photos.
-Escalate quickly, loop by loop:
-- Loop 1: small but clearly visible and wrong (one tube light is dark, the duty student's faded red bucket now stands somewhere it could not be, every classroom door is ajar, the wet mop trail runs up the wall).
-- Loop 2: the space itself distorts (the corridor is impossibly long, the same door repeats into the distance, the ceiling hangs far too low, the floor tilts, the room is mirrored, the windows are on the wrong side).
-- Loop 3: the people from the memory are back, but only as what they leave, and with them what hurt (a school uniform draped over every chair as if the class were sitting there, the shadows of a whole class on the floor at noon nap time with nobody casting them, a dark adult silhouette at the far end of the corridor with back turned, every chair turned to face the camera).
-Underneath, this school holds what hurt the student: a teacher's cold attention (being singled out, made to stand outside the classroom: one chair alone outside the door), being left out by classmates (every desk pushed away from one desk left alone in the middle, every chair turned away from it), and the weight of exams (stacks of test papers up to the ceiling, red pen marks everywhere, a wall covered in ranking sheets with no readable names). From loop 2 on, bring these in through objects and space, never through violence, insults, readable words or anything suggesting self-harm.
-The image editor refuses any picture of children or students, so classmates never appear in person: show them only through what they left behind (school uniforms draped over every chair, a school bag hanging on every desk, the shadows of a full class on the floor with nobody casting them, sneakers lined up under every desk).
-When uniforms or shoes appear, make them Taiwanese and mixed boys' and girls': short-sleeved white school shirts with navy trim, navy trousers for boys and pleated navy-plaid skirts for girls, a few bow ties, a few navy or dark-red jackets; no crests, no badges, no embroidered names or numbers. Shoes are white sneakers and canvas shoes. A teacher may appear only as a dark, out-of-focus adult silhouette far away with back turned; otherwise show the teacher through traces (red pen marks, a coat on the lectern). Never show a face. Never add ghosts, blood, injury, death, religion, politics, flags, statues or readable text. Use the player's memories when you can. Never repeat a previous change. The three lines must be very different from each other.
-Each line gives one edit instruction per photo. A change may touch one, two or all three photos; leave an instruction empty ("") for a photo that should stay exactly as it is, but make at least one photo change. Each instruction must be doable as an edit of that existing photo and visible in it.
+const BIBLE_SYSTEM = `You keep the memory of "Last One Out", a quiet horror walk through a remembered Taiwanese school at night. The player, the student on duty, gives up to three memories of their school and the year they were there. Write the memory bible that every later step follows: the same memories come back, changed, walk after walk.
+Rules: ordinary and physical; objects, light and space only. Never add people, faces, readable text, flags, statues, portraits, slogans or religious objects to the photo details. Nothing about death, injury, self-harm, politics or religion.
 Reply with JSON only:
-{"cards":[{"title":"at most 6 words in the player's language","whisper":"one short eerie line in the player's language","title_en":"the title in natural English","whisper_en":"the line in natural English","edits":{"corridor":"precise English instruction for the corridor photo, or empty","door":"... for the classroom door photo, or empty","classroom":"... for the classroom photo, or empty"},"sound":"none|silence|echo|bell|ball|laughter|giggle|running|chalk|chair|papers|speaker|water"}]}
-Sounds (pick the one that fits the change): ball = a ball bounces and rolls down the corridor; laughter = children playing somewhere out of sight; giggle = a child giggles nearby, unseen; running = small feet run past behind you; chalk = chalk scratching on a board; chair = a chair dragged across the floor; papers = sheets of paper turned and shuffled; speaker = the school speaker crackles and chimes, then nobody speaks; water = water dripping; bell = the school bell; echo = every step echoes far too long; silence = all sound stops.`;
+{"memories_en":["each memory in natural English, same order"],
+"era":"one English sentence of physical details right for a Taiwanese school in that year (furniture, appliances, lights, posters with no readable text)",
+"details":{"corridor":"extra English visual details for the night-time corridor photo, from the memories and the era","door":"... for the classroom door photo","classroom":"... for the classroom photo","office":"... for the teachers' office photo"},
+"threads":[{"memory":1,"motif":"a short English noun phrase","walk2":"how it returns, slightly wrong, in the second walk","walk3":"how it returns at its worst in the last walk"}],
+"teacher":"the homeroom teacher's clothes and one object they always carried, in English, as remembered or as fits the era (never a face)",
+"pa":"one short school PA announcement asking the student on duty to come to the teachers' office now, in the player's language, without any name",
+"pa_en":"the same announcement in natural English",
+"scores":[{"subject":"an exam subject in the player's language","subject_en":"the subject in English","score":a low score between 38 and 59}]}
+Give three scores and one thread per memory.`;
 
-const COMMENT_SYSTEM = `Write one short teacher's note for a student's contact book. The student went back to their old school, alone, and saw the changes listed below.
-Write as a teacher who finally noticed this student: warm, a little uncanny, and kind about whatever was hard back then. At most 30 words. No names, no death, no ghosts, no danger.
+const CARDS_SYSTEM = `You deal the choices in "Last One Out", a quiet horror game set in a remembered Taiwanese school at night. The player, the student on duty, walks the school three times. At the end of a walk three half-erased lines are on a chalkboard; the player keeps one, and that line decides how the next walk has changed.
+You get the memory bible (memories, era, threads that must come back changed), the walk being prepared, the changes already made, and the photos the next walk reuses.
+Walk 2 goes corridor -> classroom door -> teachers' office. Things are clearly wrong and space begins to bend: a tube light is dark and the corridor beyond it is far too long, the same door repeats into the distance, the duty student's red bucket stands where it could not be, the mop trail runs up the wall, every classroom door stands ajar. Bring back one memory thread, already wrong.
+Walk 3 goes corridor -> classroom door -> classroom, and it is the last. What hurt comes back through traces and space, never in person: a school uniform hanging on every chair, every desk pushed away from one desk left alone, every chair turned to face the camera, exam papers stacked to the ceiling, the shadows of a whole class on the floor with nobody casting them, a dark adult silhouette far away with its back turned. Bring back a memory thread at its worst.
+Look at the photos. Every instruction must name things that are really in that photo and be doable as an edit of it, clearly visible. The teachers' office has not been photographed yet: its instruction is a detail to add to its first photo.
+The image editor refuses any picture of children or students, so classmates never appear in person. Uniforms are Taiwanese, mixed boys' and girls': white short-sleeved shirts with navy trim, navy trousers or pleated navy-plaid skirts; no crests, badges, names or numbers. Shoes are white sneakers and canvas shoes. Never show a face. Never add ghosts, blood, injury, death, religion, politics, flags, statues or readable text. Never repeat a previous change. The three lines must be very different from each other.
+Each line gives one instruction per photo of the next walk; leave one empty ("") for a photo that should stay as it is, but change at least two photos.
+Reply with JSON only:
+{"cards":[{"title":"at most 6 words in the player's language","whisper":"one short eerie line in the player's language","title_en":"the title in natural English","whisper_en":"the line in natural English","edits":{"<photo id>":"precise English instruction, or empty"},"sound":"none|silence|echo|bell|ball|laughter|giggle|running|chalk|chair|papers|speaker|water"}]}
+Sounds: ball = a ball bounces and rolls down the corridor; laughter = children playing somewhere out of sight; giggle = a child giggles nearby, unseen; running = small feet run past behind you; chalk = chalk scratching on a board; chair = a chair dragged across the floor; papers = sheets of paper shuffled; speaker = the school speaker crackles; water = dripping; bell = the school bell; echo = every step echoes far too long; silence = all sound stops.`;
+
+const COMMENT_SYSTEM = `Write one short teacher's note for a student's contact book. The student went back to their old school, alone, at night, and saw the changes listed below. The memories are theirs.
+Write as the teacher who never said their name and finally noticed them: warm, a little uncanny, kind about whatever was hard back then. At most 30 words. No names, no death, no ghosts, no danger.
 Reply with JSON only: {"note":"the note in the requested language","note_en":"the same note in natural English"}`;
 
 const SOFTEN_SYSTEM = `This photo-edit instruction for a quiet horror game set in an empty Taiwanese school at night was refused by the image model's content policy.
 Rewrite it so it keeps the same unsettling idea but cannot be refused: no people of any age, no children, no students, no bodies, no faces; show absence through objects, shadows, light and space instead. Keep it one precise instruction describing only what changes. Reply with the new instruction only.`;
 
+const TRADITIONAL_SYSTEM =
+  'Rewrite this transcribed sentence in Traditional Chinese characters as written in Taiwan, with natural punctuation. Change nothing else. Reply with the sentence only.';
+
 const editPrompt = (change) =>
-  `${change} Keep everything else exactly the same: same camera position and angle, same lighting, same objects, same photographic style. If people appear, show them only from behind, far away or blurred by motion; never show a face.`;
+  `${change} ${KEEP} If people appear, show them only from behind, far away or blurred by motion; never show a face.`;
 
 // ---------- helpers ----------
 
@@ -336,6 +407,8 @@ const cleanText = (value, max) => (typeof value === 'string' ? value.trim().slic
 const newId = () => randomUUID().replaceAll('-', '').slice(0, 12);
 const ID = /^[a-f0-9]{12}$/;
 const hasCjk = (text) => /[㐀-鿿]/.test(text);
+const THIS_YEAR = new Date().getFullYear();
+const quiet = (promise) => (promise.catch(() => {}), promise); // handled later; never unhandled
 
 function parseJson(text) {
   try {
@@ -347,15 +420,12 @@ function parseJson(text) {
 
 const SOUNDS = new Set(['none', 'silence', 'echo', 'bell', 'ball', 'laughter', 'chalk', 'chair', 'papers', 'speaker', 'water', 'giggle', 'running']);
 
-function parseDeal(text) {
+function parseDeal(text, ids) {
   const cards = parseJson(text)?.cards;
-  const editsOf = (c) =>
-    c?.edits && typeof c.edits === 'object'
-      ? Object.fromEntries(SCENES.map((scene) => [scene.id, cleanText(c.edits[scene.id], 500)]))
-      : null;
-  const usable = (c) => c?.title && (cleanText(c.edit, 500) || Object.values(editsOf(c) ?? {}).some(Boolean));
+  const editsOf = (c) => Object.fromEntries(ids.map((id) => [id, cleanText(c?.edits?.[id], 500)]));
+  const usable = (c) => c?.title && Object.values(editsOf(c)).some(Boolean);
   if (!Array.isArray(cards) || cards.length < 3 || !cards.slice(0, 3).every(usable)) {
-    throw new HttpError(502, 'The cards came back garbled. Try again.');
+    throw new HttpError(502, 'The chalk lines came back garbled. Try again.');
   }
   return cards.slice(0, 3).map((c) => ({
     title: cleanText(c.title, 60),
@@ -363,7 +433,6 @@ function parseDeal(text) {
     title_en: cleanText(c.title_en, 80) || cleanText(c.title, 60),
     whisper_en: cleanText(c.whisper_en, 200) || cleanText(c.whisper, 160),
     edits: editsOf(c),
-    edit: cleanText(c.edit, 500) || Object.values(editsOf(c) ?? {}).find(Boolean) || '',
     sound: SOUNDS.has(c.sound) ? c.sound : 'none',
   }));
 }
@@ -411,6 +480,21 @@ async function readPhoto(id) {
   throw new HttpError(404, 'Photo not found.');
 }
 
+const refused = (err) => err instanceof UpstreamError && err.upstream === 400;
+
+// Tries each edit in turn and keeps the first one the image model accepts.
+async function firstAcceptedEdit(photoId, prompts) {
+  const { bytes } = await readPhoto(photoId);
+  for (const prompt of prompts) {
+    try {
+      return await savePhoto(await editImage(bytes, prompt));
+    } catch (err) {
+      if (!refused(err)) throw err;
+    }
+  }
+  return null;
+}
+
 // ---------- a remembered school ----------
 
 const schools = new Map(); // id -> school
@@ -431,8 +515,21 @@ async function exclusive(school, task) {
   }
 }
 
-function photoPrompt(scene, school) {
-  return [HOUSE_STYLE, scene.base, school.details[scene.id]].filter(Boolean).join(' ');
+function photoPrompt(id, school, extra) {
+  const era = school.bible?.era ? `The school as it was around ${school.year}: ${school.bible.era}` : '';
+  return [HOUSE_STYLE, era, SCENES[id].base, school.bible?.details?.[id], extra].filter(Boolean).join(' ');
+}
+
+// A first photograph. If the extra detail gets it refused, it is taken without it.
+async function takePhoto(id, school, extra) {
+  if (MOCK) return savePhoto(mockPhoto(id, { walk: school.changes.length, changes: school.changes, note: extra }));
+  try {
+    return await savePhoto(await generateImage(photoPrompt(id, school, extra)));
+  } catch (err) {
+    if (!refused(err)) throw err;
+    console.error(`[photo] ${id}: refused, taking it without the extra details`);
+    return savePhoto(await generateImage([HOUSE_STYLE, SCENES[id].base].join(' ')));
+  }
 }
 
 async function depthMap(photoId) {
@@ -447,29 +544,33 @@ async function depthMap(photoId) {
   }
 }
 
-async function sceneView(scene, photoId) {
-  const [doors, boards, depth] = await Promise.all([
-    findObjectsSafely(photoId, scene.find, scene.id),
-    scene.board ? findObjectsSafely(photoId, scene.board, scene.id) : [],
+// Large enough to click, and not a sliver at the edge of the frame.
+const clickable = (box) => box.w * box.h > 0.004 && box.w > 0.02;
+
+async function sceneView(id, photoId) {
+  const concepts = SCENES[id].concepts;
+  const keys = Object.keys(concepts);
+  const [depth, ...found] = await Promise.all([
     depthMap(photoId),
+    ...keys.map((key) => findObjectsSafely(photoId, concepts[key], id)),
   ]);
-  return { id: scene.id, photo: `/photos/${photoId}`, depth, doors: doors.slice(0, 3), board: boards[0] ?? null };
+  const view = { id, photo: `/photos/${photoId}`, depth };
+  keys.forEach((key, i) => {
+    if (key === 'doors') view.doors = found[i].filter(clickable).slice(0, 5);
+    else if (key === 'papers') view.papers = found[i].slice(0, 3);
+    else view[key] = found[i][0] ?? null;
+  });
+  return view;
 }
 
 async function firstWalk(school) {
-  const results = await Promise.all(
-    SCENES.map(async (scene) => {
-      const photoId = MOCK
-        ? await savePhoto(mockPhoto(scene.id, { walk: 0, changes: [] }))
-        : await savePhoto(await generateImage(photoPrompt(scene, school)));
-      return { scene, photoId };
-    }),
-  );
-  for (const { scene, photoId } of results) school.photos[scene.id] = photoId;
+  const ids = LOOPS[0];
+  const photoIds = await Promise.all(ids.map((id) => takePhoto(id, school)));
+  ids.forEach((id, i) => (school.photos[id] = photoIds[i]));
   school.first = { ...school.photos };
-  const scenes = await Promise.all(results.map(({ scene, photoId }) => sceneView(scene, photoId)));
-  school.views = Object.fromEntries(scenes.map((view) => [view.id, view]));
-  return { index: 0, scenes };
+  const scenes = await Promise.all(ids.map((id, i) => sceneView(id, photoIds[i])));
+  for (const view of scenes) school.views[view.id] = view;
+  return { index: 0, scenes, flicker: null, scare: null };
 }
 
 // When the image model refuses an edit, Muse Spark rewrites it without people and
@@ -485,23 +586,23 @@ async function softenEdit(edit) {
   return cleanText(text, 500);
 }
 
-// Edits one scene's photo for a card: refused -> rewritten and retried; not visible ->
-// pushed once more; still refused -> the photo stays as it was.
-async function editScene(scene, previous, instruction) {
+// Edits one scene's photo: refused -> rewritten and retried; not visible -> pushed once
+// more; still refused -> null, and the photo stays as it was.
+async function editScene(id, previous, instruction) {
   const { bytes } = await readPhoto(previous);
   let used = instruction;
   let photoId;
   try {
     photoId = await savePhoto(await editImage(bytes, editPrompt(used)));
   } catch (err) {
-    if (!(err instanceof UpstreamError) || err.upstream !== 400) throw err;
+    if (!refused(err)) throw err;
     try {
       used = (await softenEdit(instruction)) || instruction.split(/(?<=\.)\s/)[0];
-      console.error(`[edit] ${scene.id}: refused, retrying a rewritten edit`);
+      console.error(`[edit] ${id}: refused, retrying a rewritten edit`);
       photoId = await savePhoto(await editImage(bytes, editPrompt(used)));
     } catch (again) {
       if (again.status === 402) throw again;
-      console.error(`[edit] ${scene.id}: refused twice, keeping the previous photo`);
+      console.error(`[edit] ${id}: refused twice, keeping the previous photo`);
       return null;
     }
   }
@@ -510,89 +611,300 @@ async function editScene(scene, previous, instruction) {
       photoId = await savePhoto(await editImage(bytes, editPrompt(`Make this change clearly visible: ${used}`)));
     } catch (err) {
       if (err.status === 402) throw err;
-      console.error(`[edit] ${scene.id}: retry failed, keeping the first edit`);
+      console.error(`[edit] ${id}: retry failed, keeping the first edit`);
     }
   }
   return photoId;
 }
 
-// Applies one card. Each scene has its own instruction; an empty one leaves that
-// photo (and its doors, chalkboard and depth) exactly as it was.
-async function changedWalk(school, card) {
-  const changes = [...school.changes, card];
-  const results = await Promise.all(
-    SCENES.map(async (scene) => {
-      const previous = school.photos[scene.id];
-      if (MOCK) return { scene, photoId: await savePhoto(mockPhoto(scene.id, { walk: changes.length, changes })) };
-      const instruction = card.edits ? card.edits[scene.id] : card.edit;
-      if (!instruction) return { scene, photoId: previous, kept: true };
-      const photoId = await editScene(scene, previous, instruction);
-      return photoId ? { scene, photoId } : { scene, photoId: previous, kept: true };
-    }),
-  );
-  const scenes = await Promise.all(
-    results.map(({ scene, photoId, kept }) => (kept && school.views?.[scene.id] ? school.views[scene.id] : sceneView(scene, photoId))),
-  );
-  return { photos: Object.fromEntries(results.map(({ scene, photoId }) => [scene.id, photoId])), scenes };
-}
+// ---------- the memory bible ----------
 
-function commit(school, card, walk) {
-  school.changes.push(card);
-  school.photos = walk.photos;
-  school.views = Object.fromEntries(walk.scenes.map((view) => [view.id, view]));
-  return { index: school.changes.length, scenes: walk.scenes };
-}
+const MOCK_BIBLE = {
+  memories_en: [],
+  era: '',
+  details: {},
+  threads: [],
+  teacher: '',
+  pa: { zh: '值日生，請馬上到辦公室來。', en: 'Student on duty, please come to the teachers’ office now.' },
+  scores: [
+    { subject: '數學', subject_en: 'Maths', score: 42 },
+    { subject: '英文', subject_en: 'English', score: 57 },
+    { subject: '理化', subject_en: 'Science', score: 38 },
+  ],
+};
 
-async function dealCards(school) {
-  if (MOCK) return MOCK_DEALS[school.changes.length % MOCK_DEALS.length];
+async function memoryBible(school) {
+  if (MOCK) return { ...MOCK_BIBLE, memories_en: school.memories };
   const text = await chat(
     [
-      { role: 'system', content: CARDS_SYSTEM },
+      { role: 'system', content: BIBLE_SYSTEM },
       {
         role: 'user',
         content: JSON.stringify({
-          loop: school.changes.length + 1,
-          of: DRAWS,
           language: school.lang === 'zh' ? 'Traditional Chinese (Taiwan)' : 'English',
+          year: school.year,
           memories: school.memories,
-          previous: school.changes.map((c) => c.edit),
         }),
       },
     ],
     { effort: 'low', maxTokens: 6000 },
   );
-  return parseDeal(text);
+  const b = parseJson(text) ?? {};
+  const fallback = MOCK_BIBLE;
+  const scores = (Array.isArray(b.scores) ? b.scores : [])
+    .map((s) => ({
+      subject: cleanText(s?.subject, 12),
+      subject_en: cleanText(s?.subject_en, 20) || cleanText(s?.subject, 12),
+      score: Math.min(59, Math.max(30, Math.round(Number(s?.score)) || 0)),
+    }))
+    .filter((s) => s.subject && s.score)
+    .slice(0, 3);
+  return {
+    memories_en: (Array.isArray(b.memories_en) ? b.memories_en : []).map((m) => cleanText(m, 300)).slice(0, 3),
+    era: cleanText(b.era, 400),
+    details: Object.fromEntries(Object.keys(SCENES).map((id) => [id, cleanText(b.details?.[id], 400)])),
+    threads: (Array.isArray(b.threads) ? b.threads : []).slice(0, 3).map((th) => ({
+      motif: cleanText(th?.motif, 80),
+      walk2: cleanText(th?.walk2, 300),
+      walk3: cleanText(th?.walk3, 300),
+    })),
+    teacher: cleanText(b.teacher, 200),
+    pa: {
+      [school.lang]: cleanText(b.pa, 80) || fallback.pa[school.lang],
+      en: cleanText(b.pa_en, 140) || fallback.pa.en,
+    },
+    scores: scores.length === 3 ? scores : fallback.scores,
+  };
 }
 
-function dealFor(school) {
-  school.dealing ??= dealCards(school).catch((err) => {
-    school.dealing = null;
-    throw err;
+// What the page needs from the bible. The page adds the player's name itself.
+const publicBible = (school) => ({
+  year: school.year,
+  scores: school.bible.scores,
+  pa: school.bible.pa,
+});
+
+// ---------- the next walk, prepared while you walk this one ----------
+
+async function dealCards(school, loop) {
+  if (MOCK) return MOCK_DEALS[(loop - 1) % MOCK_DEALS.length];
+  const ids = LOOPS[loop];
+  const shown = [...new Set(ids)].filter((id) => school.photos[id]);
+  const brief = JSON.stringify({
+    walk: loop + 1,
+    of: LOOPS.length,
+    photos: ids,
+    language: school.lang === 'zh' ? 'Traditional Chinese (Taiwan)' : 'English',
+    year: school.year,
+    memories: school.memories,
+    bible: { era: school.bible.era, threads: school.bible.threads, teacher: school.bible.teacher },
+    previous: school.changes.map((c) => c.title_en || c.title),
   });
-  return school.dealing;
+  const images = await Promise.all(
+    shown.map(async (id) => [
+      { type: 'text', text: `Photo "${id}" as it is now:` },
+      { type: 'image_url', image_url: { url: dataUrl((await readPhoto(school.photos[id])).bytes) } },
+    ]),
+  );
+  const ask = (withPhotos) =>
+    chat(
+      [
+        { role: 'system', content: CARDS_SYSTEM },
+        { role: 'user', content: withPhotos ? [{ type: 'text', text: brief }, ...images.flat()] : brief },
+      ],
+      { effort: 'low', maxTokens: 8000 },
+    );
+  try {
+    return parseDeal(await ask(true), ids);
+  } catch (err) {
+    if (err.status === 402) throw err;
+    console.error(`[deal] ${err.message}; dealing again without the photos`);
+    return parseDeal(await ask(false), ids);
+  }
+}
+
+// A frame that shows for a fraction of a second while a tube flickers: someone is there.
+async function flickerFrame(corridorId, loop) {
+  if (!FLICKER_FIGURE[loop]) return null;
+  if (MOCK) return `/photos/${await savePhoto(mockPhoto('corridor', { walk: loop, changes: [], note: 'flicker: a figure down the corridor' }))}`;
+  try {
+    const id = await firstAcceptedEdit(corridorId, [FLICKER_FIGURE[loop]]);
+    return id && `/photos/${id}`;
+  } catch (err) {
+    if (err.status === 402) throw err;
+    console.error(`[flicker] ${err.message}`);
+    return null;
+  }
+}
+
+// The first scare: the door opens onto the corridor where you started, and the
+// teacher is standing right there.
+async function teacherScare(school) {
+  if (MOCK) return `/photos/${await savePhoto(mockPhoto('corridor', { walk: 1, changes: [], note: 'scare: the faceless teacher' }))}`;
+  try {
+    const id = await firstAcceptedEdit(school.first.corridor, [SCARE_TEACHER(school.bible.teacher), SCARE_TEACHER()]);
+    return id && `/photos/${id}`;
+  } catch (err) {
+    if (err.status === 402) throw err;
+    console.error(`[scare] teacher: ${err.message}`);
+    return null;
+  }
+}
+
+// The second scare: the lights go out and everything in the classroom faces you.
+async function lightsOutScare(classroomId) {
+  if (MOCK) return `/photos/${await savePhoto(mockPhoto('classroom', { walk: 2, changes: [], note: 'scare: lights out, everything faces you' }))}`;
+  try {
+    const id = await firstAcceptedEdit(classroomId, LIGHTS_OUT);
+    return id && `/photos/${id}`;
+  } catch (err) {
+    if (err.status === 402) throw err;
+    console.error(`[scare] lights out: ${err.message}`);
+    return null;
+  }
+}
+
+// Renders one chalk line's version of the next walk, photos, doors and scares included.
+async function renderOption(school, loop, card) {
+  const ids = LOOPS[loop];
+  const changes = [...school.changes, card];
+  const last = loop === LOOPS.length - 1;
+  const photoIds = {};
+  const views = {};
+  await Promise.all(
+    ids.map(async (id) => {
+      const previous = school.photos[id];
+      let photoId = previous;
+      if (MOCK) photoId = await savePhoto(mockPhoto(id, { walk: loop, changes }));
+      else if (!previous) photoId = await takePhoto(id, school, card.edits[id]); // first time in this room
+      else {
+        const instruction = [card.edits[id], last && id === 'classroom' ? FINAL_CLASSROOM : ''].filter(Boolean).join(' ');
+        if (instruction) photoId = (await editScene(id, previous, instruction)) ?? previous;
+      }
+      photoIds[id] = photoId;
+      views[id] = photoId === previous && school.views[id] ? school.views[id] : await sceneView(id, photoId);
+    }),
+  );
+  const [flicker, scare] = await Promise.all([
+    flickerFrame(photoIds.corridor, loop),
+    loop === 1 ? school.scare1 : lightsOutScare(photoIds.classroom),
+  ]);
+  return {
+    card,
+    photoIds,
+    walk: {
+      index: loop,
+      scenes: ids.map((id) => views[id]),
+      flicker: flicker ? { scene: 'corridor', photo: flicker } : null,
+      scare: scare ? { after: loop === 1 ? 'door' : 'classroom', photo: scare } : null,
+    },
+  };
+}
+
+// Starts dealing and rendering all three lines of the next walk in the background.
+function prepareLoop(school) {
+  const loop = school.changes.length + 1;
+  const cards = quiet(dealCards(school, loop));
+  const options = [0, 1, 2].map((i) => quiet(cards.then((dealt) => renderOption(school, loop, dealt[i]))));
+  school.next = { loop, cards, options };
+  return school.next;
+}
+
+function commit(school, option) {
+  school.changes.push(option.card);
+  Object.assign(school.photos, option.photoIds);
+  for (const view of option.walk.scenes) school.views[view.id] = view;
+  return option.walk;
 }
 
 // The teacher's note, in the player's language and in English. Never left blank.
 async function teacherComment(school) {
   const fallback = { comment: MOCK_COMMENT[school.lang], comment_en: MOCK_COMMENT.en };
   if (MOCK) return fallback;
-  const text = await chat(
-    [
-      { role: 'system', content: COMMENT_SYSTEM },
-      {
-        role: 'user',
-        content: `Language: ${school.lang === 'zh' ? 'Traditional Chinese (Taiwan)' : 'English'}\nChanges: ${school.changes.map((c) => c.title_en || c.title).join('; ')}`,
-      },
-    ],
-    { effort: 'low', maxTokens: 4000 },
+  try {
+    const text = await chat(
+      [
+        { role: 'system', content: COMMENT_SYSTEM },
+        {
+          role: 'user',
+          content: `Language: ${school.lang === 'zh' ? 'Traditional Chinese (Taiwan)' : 'English'}\nMemories: ${(school.bible.memories_en.length ? school.bible.memories_en : school.memories).join('; ')}\nChanges: ${school.changes.map((c) => c.title_en || c.title).join('; ')}`,
+        },
+      ],
+      { effort: 'low', maxTokens: 4000 },
+    );
+    const note = parseJson(text);
+    const comment = cleanText(note?.note, 200);
+    if (!comment) return fallback;
+    return { comment, comment_en: cleanText(note?.note_en, 300) || comment };
+  } catch (err) {
+    if (err.status === 402) throw err;
+    console.error(`[comment] ${err.message}`);
+    return fallback;
+  }
+}
+
+// The ending is prepared during the last walk: the classroom in daylight and the note.
+async function prepareEnding(school) {
+  const [daylightId, comment] = await Promise.all([
+    MOCK
+      ? savePhoto(mockPhoto('classroom', { walk: school.changes.length, changes: school.changes, daylight: true }))
+      : readPhoto(school.photos.classroom).then(({ bytes }) => editImage(bytes, DAYLIGHT_EDIT)).then(savePhoto),
+    teacherComment(school),
+  ]);
+  return {
+    daylight: `/photos/${daylightId}`,
+    first: `/photos/${school.first.corridor}`,
+    last: `/photos/${school.photos.corridor}`,
+    year: school.year,
+    memories: school.memories,
+    memories_en: school.bible.memories_en,
+    changes: school.changes.map((c) => c.title),
+    changes_en: school.changes.map((c) => c.title_en || c.title),
+    ...comment,
+  };
+}
+
+// ---------- your voice ----------
+
+// Muse Voice Transcribe takes WAV, mono, 16-bit, 16 or 24 kHz. Nothing is stored.
+async function transcribe(wav, lang) {
+  if (MOCK) return '';
+  if (wav.length < 44 || wav.subarray(0, 4).toString() !== 'RIFF' || wav.subarray(8, 12).toString() !== 'WAVE') {
+    throw new HttpError(400, 'Send a WAV recording.');
+  }
+  assertBudget();
+  const form = new FormData();
+  form.append(
+    'request',
+    new Blob(
+      [JSON.stringify({ model: VOICE_MODEL, mode: 'PUSH_TO_TALK', audioEncoding: 'WAV', languageBias: [lang === 'zh' ? 'Chinese' : 'English'] })],
+      { type: 'application/json' },
+    ),
   );
-  const note = parseJson(text);
-  const comment = cleanText(note?.note, 200);
-  if (!comment) return fallback;
-  return { comment, comment_en: cleanText(note?.note_en, 300) || comment };
+  form.append('audio', new Blob([wav], { type: 'audio/wav' }), 'voice.wav');
+  const res = await fetch(`${API_BASE}/asr/transcribe`, {
+    method: 'POST',
+    headers: authHeader(),
+    body: form,
+    redirect: 'error',
+    signal: AbortSignal.timeout(60_000),
+  });
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    const reason = String(data?.error?.message ?? data?.message ?? '').replace(/\s+/g, ' ').slice(0, 200);
+    console.error(`[voice] HTTP ${res.status} ${reason}`);
+    throw new UpstreamError(res.status);
+  }
+  await addSpend(((wav.length - 44) / 32000 / 3600) * VOICE_PRICE_PER_HOUR);
+  return cleanText(data?.transcript ?? data?.text ?? '', 400);
 }
 
 // ---------- routes ----------
+
+const yearOf = (value) => {
+  const year = Math.round(Number(value));
+  return year >= 1950 && year <= THIS_YEAR ? year : THIS_YEAR - 15;
+};
 
 const routes = {
   'GET /api/status': async () => ({
@@ -610,135 +922,124 @@ const routes = {
     const school = {
       id: newId(),
       memories,
+      year: yearOf(body.year),
       lang: ['zh', 'en'].includes(body.lang) ? body.lang : hasCjk(memories.join('')) ? 'zh' : 'en',
-      details: {},
+      bible: null,
       photos: {},
+      views: {},
       first: {},
       changes: [],
-      final: false,
+      next: null,
+      scare1: null,
       ending: null,
-      dealing: null,
       busy: false,
-      record: { walks: [], draws: [], final: null }, // replayed later without any model calls
+      record: { walks: [], draws: [] }, // replayed later without any model calls
     };
     schools.set(school.id, school);
     if (schools.size > 200) schools.delete(schools.keys().next().value);
     return exclusive(school, async () => {
-      if (!MOCK && memories.length) {
-        const details = parseJson(
-          await chat(
-            [
-              { role: 'system', content: DETAILS_SYSTEM },
-              { role: 'user', content: memories.join('\n') },
-            ],
-            { effort: 'low', maxTokens: 4000 },
-          ),
-        );
-        for (const scene of SCENES) school.details[scene.id] = cleanText(details?.[scene.id], 400);
-        school.memoriesEn = (Array.isArray(details?.memories_en) ? details.memories_en : []).map((m) => cleanText(m, 300)).slice(0, 3);
-      }
+      school.bible = await memoryBible(school);
       const walk = await firstWalk(school);
       school.record.walks.push(walk);
-      return { schoolId: school.id, lang: school.lang, draws: DRAWS, walk };
+      school.scare1 = quiet(teacherScare(school));
+      prepareLoop(school);
+      return { schoolId: school.id, lang: school.lang, draws: DRAWS, bible: publicBible(school), walk };
     });
   },
 
-  // Deals ahead of time so the cards are ready when the player reaches them.
-  'POST /api/deal': async (body) => {
-    const school = getSchool(body.schoolId);
-    if (school.changes.length >= DRAWS) return { ready: false };
-    await dealFor(school);
-    return { ready: true };
-  },
-
+  // Keeping a chalk line. Its walk was rendered in the background; this waits for it.
   'POST /api/draw': async (body) => {
     const school = getSchool(body.schoolId);
     const index = Number(body.index);
-    if (![0, 1, 2].includes(index)) throw new HttpError(400, 'Pick one of the three cards.');
-    if (school.changes.length >= DRAWS) throw new HttpError(409, 'No cards left. Walk on.');
+    if (![0, 1, 2].includes(index)) throw new HttpError(400, 'Keep one of the three lines.');
+    if (school.changes.length >= DRAWS) throw new HttpError(409, 'No lines left. Walk on.');
     return exclusive(school, async () => {
-      const cards = await dealFor(school);
-      const changed = await changedWalk(school, cards[index]);
-      school.dealing = null;
-      const walk = commit(school, cards[index], changed);
+      let next = school.next ?? prepareLoop(school);
+      let cards = await next.cards.catch(() => null);
+      if (!cards) {
+        next = prepareLoop(school); // the deal failed once; deal again
+        cards = await next.cards;
+      }
+      const option = await next.options[index].catch((err) => {
+        if (err.status === 402) throw err;
+        console.error(`[draw] ${err.message}; rendering the line again`);
+        return renderOption(school, next.loop, cards[index]);
+      });
+      school.next = null;
+      const walk = commit(school, option);
       school.record.draws.push({ cards, picked: index });
       school.record.walks.push(walk);
-      return { cards, picked: index, walk, lastDraw: school.changes.length >= DRAWS };
-    });
-  },
-
-  'POST /api/final': async (body) => {
-    const school = getSchool(body.schoolId);
-    if (school.changes.length < DRAWS) throw new HttpError(409, 'There are still cards to draw.');
-    if (school.final) throw new HttpError(409, 'This was already the last walk.');
-    return exclusive(school, async () => {
-      const card = FINAL_CARD[school.lang];
-      const walk = commit(school, card, await changedWalk(school, card));
-      school.final = true;
-      school.record.final = { card };
-      school.record.walks.push(walk);
-      return { card, walk };
+      const last = school.changes.length >= DRAWS;
+      if (last) school.ending = quiet(prepareEnding(school));
+      else prepareLoop(school);
+      return { cards, picked: index, walk, last };
     });
   },
 
   'POST /api/ending': async (body) => {
     const school = getSchool(body.schoolId);
-    if (!school.final) throw new HttpError(409, 'Not yet.');
+    if (school.changes.length < DRAWS || !school.ending) throw new HttpError(409, 'Not yet.');
     return exclusive(school, async () => {
-      if (!school.ending) {
-        const [daylightId, comment] = await Promise.all([
-          MOCK
-            ? savePhoto(mockPhoto('classroom', { walk: school.changes.length, changes: school.changes, daylight: true }))
-            : readPhoto(school.photos.classroom).then(({ bytes }) => editImage(bytes, DAYLIGHT_EDIT)).then(savePhoto),
-          teacherComment(school),
-        ]);
-        school.ending = {
-          daylight: `/photos/${daylightId}`,
-          first: `/photos/${school.first.corridor}`,
-          last: `/photos/${school.photos.corridor}`,
-          memories: school.memories,
-          memories_en: school.memoriesEn ?? [],
-          changes: school.changes.map((c) => c.title),
-          changes_en: school.changes.map((c) => c.title_en || c.title),
-          ...comment,
-        };
-        await saveRun(school).catch((err) => console.error(`[run] not saved: ${err.message}`));
+      const ending = await school.ending.catch((err) => {
+        if (err.status === 402) throw err;
+        school.ending = quiet(prepareEnding(school));
+        return school.ending;
+      });
+      if (!school.saved) {
+        school.saved = true;
+        await saveRun(school, ending).catch((err) => console.error(`[run] not saved: ${err.message}`));
       }
-      return school.ending;
+      return ending;
     });
+  },
+};
+
+// Your voice: the memories you speak and your answer at roll call. Audio in, text out.
+const binaryRoutes = {
+  'POST /api/transcribe': async (bytes, url) => {
+    const lang = url.searchParams.get('lang') === 'zh' ? 'zh' : 'en';
+    let transcript = await transcribe(bytes, lang);
+    // Speech comes back in Simplified Chinese; a spoken memory is written the Taiwanese way.
+    if (lang === 'zh' && url.searchParams.get('for') === 'memory' && transcript) {
+      transcript = cleanText(await chat([{ role: 'system', content: TRADITIONAL_SYSTEM }, { role: 'user', content: transcript }], { effort: 'low', maxTokens: 1500 }), 200) || transcript;
+    }
+    return { transcript: lang === 'en' ? transcript.replace(/[。，]+/g, '').trim() : transcript.replace(/。{2,}/g, '。') };
   },
 };
 
 // Saves a finished walk with its photos to runs/<id>/, so scripts/build-demo.mjs can
 // publish a replay that needs no model calls. The player's name is never part of it.
-async function saveRun(school) {
+async function saveRun(school, ending) {
   const dir = join(RUNS_DIR, school.id);
   const photoDir = join(dir, 'photos');
   await mkdir(photoDir, { recursive: true });
   const local = async (url) => {
     if (!url) return url;
-    const { bytes, mime } = await readPhoto(url.slice('/photos/'.length));
-    const name = `${url.slice('/photos/'.length)}.${EXT[mime]}`;
+    const id = url.slice('/photos/'.length);
+    const { bytes, mime } = await readPhoto(id);
+    const name = `${id}.${EXT[mime]}`;
     await writeFile(join(photoDir, name), bytes);
     return `photos/${name}`;
   };
+  const frame = async (f) => (f ? { ...f, photo: await local(f.photo) } : null);
   const walks = await Promise.all(
     school.record.walks.map(async (walk) => ({
-      index: walk.index,
+      ...walk,
       scenes: await Promise.all(
         walk.scenes.map(async (scene) => ({ ...scene, photo: await local(scene.photo), depth: await local(scene.depth) })),
       ),
+      flicker: await frame(walk.flicker),
+      scare: await frame(walk.scare),
     })),
   );
-  const e = school.ending;
   const run = {
     lang: school.lang,
     memories: school.memories,
-    memories_en: school.memoriesEn ?? [],
+    memories_en: school.bible.memories_en,
+    bible: publicBible(school),
     walks,
     draws: school.record.draws,
-    final: school.record.final,
-    ending: { ...e, daylight: await local(e.daylight), first: await local(e.first), last: await local(e.last) },
+    ending: { ...ending, daylight: await local(ending.daylight), first: await local(ending.first), last: await local(ending.last) },
   };
   await writeFile(join(dir, 'run.json'), JSON.stringify(run, null, 2));
   console.log(`[run] saved runs/${school.id}`);
@@ -750,7 +1051,7 @@ const APP_CSP =
   "default-src 'self'; img-src 'self' blob: data:; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; " +
   "base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
 const PHOTO_CSP = "default-src 'none'; style-src 'unsafe-inline'";
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png' };
+const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.png': 'image/png', '.mp3': 'audio/mpeg' };
 
 function send(res, status, body, headers) {
   res.writeHead(status, { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', ...headers });
@@ -779,6 +1080,17 @@ async function readJson(req) {
   }
 }
 
+async function readBytes(req, limit) {
+  let size = 0;
+  const chunks = [];
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > limit) throw new HttpError(413, 'Too long. Keep it short.');
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
+}
+
 async function serveStatic(pathname, res) {
   const file = resolve(PUBLIC, `.${pathname === '/' ? '/index.html' : pathname}`);
   if (!file.startsWith(PUBLIC + sep)) return sendJson(res, 404, { error: 'Not found' });
@@ -804,6 +1116,8 @@ createServer(async (req, res) => {
     if (req.method === 'GET' && url.pathname.startsWith('/photos/')) return await servePhoto(url.pathname.slice(8), res);
     const route = routes[`${req.method} ${url.pathname}`];
     if (route) return sendJson(res, 200, await route(req.method === 'POST' ? await readJson(req) : {}));
+    const binary = binaryRoutes[`${req.method} ${url.pathname}`];
+    if (binary) return sendJson(res, 200, await binary(await readBytes(req, 2_000_000), url));
     if (req.method === 'GET') return await serveStatic(url.pathname, res);
     sendJson(res, 404, { error: 'Not found' });
   } catch (err) {
