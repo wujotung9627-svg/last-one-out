@@ -84,6 +84,9 @@ button:disabled { cursor: default; }
 
 #photo-next { opacity: 0; pointer-events: none; }
 
+#gl { position: absolute; inset: 0; width: 100%; height: 100%; }
+#gl[hidden] { display: none; }
+
 #hotspots { position: absolute; inset: 0; }
 
 .hotspot {

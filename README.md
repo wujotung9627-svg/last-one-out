@@ -10,7 +10,7 @@ Built for the Meta Global AI Developer Hackathon (Oct 26 – Nov 4, 2026), Indie
 
 1. Write your name and three things you remember about your school. The name stays in your browser.
 2. Muse Spark turns the memories into visual details, and Muse Image takes three night-time photographs of that school: the corridor, a classroom door, the classroom.
-3. You walk photo by photo. SAM 3.1 finds the doors in each photo, and those doors are what you click to walk on. It also finds the chalkboard, where your name slowly comes into focus.
+3. You walk photo by photo. SAM 3.1 finds the doors in each photo, and those doors are what you click to walk on. It also finds the chalkboard, where your name slowly comes into focus. Walking is 3D: Muse Image redraws each photo as a depth map, the page turns the photo into a shallow 3D surface, and the camera moves into it, so near things rush past while the far end of the corridor barely moves.
 4. Each time you come back around, you draw one of three face-down cards. Muse Spark deals them, pacing how far things drift. Muse Image edits all three photos to match the card, and Muse Spark looks at each edited photo to check the change really shows; if not, the edit is redone once.
 5. After three cards comes one last walk at floor height. Then the classroom turns to afternoon light, and the night ends on a contact book page (聯絡簿) with what you remembered, what it became, and a teacher's note. You can save it with or without your name.
 
@@ -19,7 +19,7 @@ Built for the Meta Global AI Developer Hackathon (Oct 26 – Nov 4, 2026), Indie
 | Model | Where it is used |
 |---|---|
 | `muse-spark-1.3` | Memories into visual details; dealing and pacing the cards; checking each edited photo shows its change; the teacher's note |
-| `muse-image-1.0` | Taking the first photographs and editing them after every card |
+| `muse-image-1.0` | Taking the first photographs, editing them after every card, and redrawing each one as a depth map for the 3D walk |
 | `sam-3.1` | Finding doors (what you can walk through) and the chalkboard (where your name is written) |
 
 ## How it is built
@@ -34,14 +34,15 @@ browser (public/)                        server.mjs (Node, no packages)         
 ```
 
 - The house style (an early-2000s flash snapshot of a clean, ordinary school at night with one red slipper) is fixed in `server.mjs`, so every photo looks like it came from the same camera.
+- The 3D walk (`public/walk3d.js`) is plain WebGL2. A depth map from Muse Image is used only if it really looks like one (grey, with contrast, nearer at the bottom); otherwise the page treats the scene as a box seen from inside, which keeps straight lines straight. At rest the 3D surface lines up exactly with the photo. Without WebGL2, or with reduced motion, it falls back to a flat zoom.
 - Sound is synthesised in the browser: footsteps on terrazzo, the 60 Hz fluorescent hum of Taiwan's mains, the school bell. No recordings.
 - Without an API key the server runs in mock mode: labelled drawings stand in for photos, so the whole walk can be played offline.
 
 ## Status (2026-11-03)
 
-- The whole walk runs end to end in mock mode, tested in Chrome.
-- The calls to Muse Spark, Muse Image and SAM 3.1 are written against the public docs but have not yet run against the live API. Two formats are not documented and need checking with a key: whether SAM accepts an inline image (the code falls back to an uploaded file) and the exact image-edit response.
-- Not built yet: speaking your memories (Muse Voice Transcribe), a parallax effect between photos.
+- The whole walk, including the 3D walking with guessed depth, runs end to end in mock mode, tested in Chrome.
+- The calls to Muse Spark, Muse Image and SAM 3.1 are written against the public docs but have not yet run against the live API. Two formats are not documented and need checking with a key: whether SAM accepts an inline image (the code falls back to an uploaded file) and the exact image-edit response. Whether Muse Image draws usable depth maps is also untested.
+- Not built yet: speaking your memories (Muse Voice Transcribe).
 
 This repository started on 2026-11-03 (Taipei time) as a different idea, mini-games generated from mutation cards, and changed direction the same day. Everything here was written during the hackathon; the commit history shows what was added and when.
 

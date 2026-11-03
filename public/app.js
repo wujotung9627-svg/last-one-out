@@ -1,8 +1,11 @@
 import { createAudio } from './audio.js';
 import { drawContactBook } from './ending.js';
+import { createWalker } from './walk3d.js';
 
 const $ = (selector) => document.querySelector(selector);
-const STEP_MS = 1100;
+const STEP_MS = 1100; // flat fallback transition
+const WALK_MS = 1500; // 3D walk into the next photo
+const ARRIVE_MS = 1600;
 const BLUR_BY_WALK = [10, 7, 4, 2, 0]; // the name on the board sharpens walk by walk
 const REDUCED_MOTION = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -63,6 +66,23 @@ const state = {
 };
 
 const t = (key) => LINES[state.lang][key];
+
+// Real parallax when WebGL2 is there; otherwise (or with reduced motion) a flat zoom.
+const walker = REDUCED_MOTION ? null : createWalker($('#gl'));
+
+async function walk3d(task) {
+  const gl = $('#gl');
+  gl.hidden = false;
+  try {
+    await task();
+    return true;
+  } catch (err) {
+    console.warn('3D walk failed, using the flat one:', err.message);
+    return false;
+  } finally {
+    gl.hidden = true;
+  }
+}
 
 function el(tag, text) {
   const node = document.createElement(tag);
@@ -184,6 +204,19 @@ async function stepInto(scene) {
   const next = $('#photo-next');
   $('#hotspots').replaceChildren();
   $('#board-name').hidden = true;
+  if (walker) {
+    const from = currentScene();
+    state.audio?.footsteps(3);
+    const walked = await walk3d(async () => {
+      await walker.walk(from, scene, WALK_MS);
+      photo.src = scene.photo; // swap under the canvas so nothing flashes
+      await photo.decode().catch(() => {});
+    });
+    if (walked) {
+      render(scene);
+      return;
+    }
+  }
   next.src = scene.photo;
   await next.decode().catch(() => {});
   state.audio?.footsteps(3);
@@ -218,9 +251,11 @@ async function beginWalk(walk, line, sound) {
   const photo = $('#photo');
   photo.src = walk.scenes[0].photo;
   await photo.decode().catch(() => {});
-  render(walk.scenes[0]);
-  photo.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 1400, easing: 'ease-out' });
   state.audio?.footsteps(4);
+  if (!(walker && (await walk3d(() => walker.arrive(walk.scenes[0], ARRIVE_MS))))) {
+    photo.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 1400, easing: 'ease-out' });
+  }
+  render(walk.scenes[0]);
 }
 
 async function advance() {

@@ -284,6 +284,12 @@ const FINAL_CARD = {
   zh: { title: '又變小了', whisper: '課桌本來就這麼高。', edit: FINAL_EDIT, sound: 'bell' },
 };
 
+// Muse Image redraws each photo as a depth map, which the page uses for the 3D walk.
+// The page checks it really looks like one and otherwise guesses depth itself.
+const DEPTH_EDIT =
+  'Redraw this photo as a grayscale depth map: pure white for the nearest surfaces, fading smoothly to pure black for the farthest. Same framing and composition, no texture, no lines, no color.';
+const AI_DEPTH = process.env.AI_DEPTH !== 'off';
+
 const DAYLIGHT_EDIT =
   'Same classroom, same camera position and angle, now in warm late-afternoon daylight: windows bright, sunlight falling across the desks, fluorescent tubes off. Keep every object exactly where it is.';
 
@@ -400,12 +406,25 @@ function photoPrompt(scene, school) {
   return [HOUSE_STYLE, scene.base, school.details[scene.id]].filter(Boolean).join(' ');
 }
 
+async function depthMap(photoId) {
+  if (MOCK || !AI_DEPTH) return null;
+  try {
+    const { bytes } = await readPhoto(photoId);
+    return `/photos/${await savePhoto(await editImage(bytes, DEPTH_EDIT))}`;
+  } catch (err) {
+    if (err.status === 402) throw err;
+    console.error(`[depth] ${err.message}`);
+    return null;
+  }
+}
+
 async function sceneView(scene, photoId) {
-  const [doors, boards] = await Promise.all([
+  const [doors, boards, depth] = await Promise.all([
     findObjectsSafely(photoId, scene.find, scene.id),
     scene.board ? findObjectsSafely(photoId, scene.board, scene.id) : [],
+    depthMap(photoId),
   ]);
-  return { id: scene.id, photo: `/photos/${photoId}`, doors: doors.slice(0, 3), board: boards[0] ?? null };
+  return { id: scene.id, photo: `/photos/${photoId}`, depth, doors: doors.slice(0, 3), board: boards[0] ?? null };
 }
 
 async function firstWalk(school) {
