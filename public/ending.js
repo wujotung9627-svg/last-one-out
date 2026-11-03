@@ -56,6 +56,12 @@ function rocDate(date) {
   return [`${year}年`, `${zhNumber(date.getMonth() + 1)}月`, `${zhNumber(date.getDate())}日`, `星期${WEEKDAYS[date.getDay()]}`];
 }
 
+// The page is dated today, in the year you were on duty.
+function bookDay(book) {
+  const now = new Date();
+  return new Date(book.year ?? now.getFullYear(), now.getMonth(), now.getDate());
+}
+
 // A little seeded randomness so the page looks the same every time it is drawn.
 function seeded(seed) {
   let s = seed % 2147483647 || 1;
@@ -248,14 +254,14 @@ export async function drawContactBook(canvas, book, hideName) {
   // Date column (far right).
   box(c, 1440, top, 100, bottom - top);
   if (english) {
-    const now = new Date();
+    const now = bookDay(book);
     const parts = [now.toLocaleDateString('en-US', { weekday: 'short' }), now.toLocaleDateString('en-US', { month: 'short' }), String(now.getDate()), String(now.getFullYear())];
     c.fillStyle = PENCIL;
     c.font = `36px ${HAND_EN}`;
     c.textAlign = 'center';
     parts.forEach((part, i) => c.fillText(part, 1490, top + 70 + i * 60));
   } else {
-    const [year, month, day, weekday] = rocDate(new Date());
+    const [year, month, day, weekday] = rocDate(bookDay(book));
     vertical(c, `${year}${month}${day}`, { right: 1540, top: top + 20, cell: 50, rows: 12, cols: 1, color: PENCIL, size: 38, rand });
     vertical(c, weekday, { right: 1540, top: top + 20 + 12 * 50 + 10, cell: 50, rows: 3, cols: 1, color: PENCIL, size: 38, rand });
   }

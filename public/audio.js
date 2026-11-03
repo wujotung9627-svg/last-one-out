@@ -710,6 +710,38 @@ export function createAudio() {
   }
 
   // A heavy hit for a jump scare: a door slamming, a low boom, and a dissonant shriek.
+  // A whole class slaps its desks at once: thirty-odd palms on wood within a few
+  // milliseconds of each other, spread across the room in front of you.
+  function deskSlap() {
+    const at = ctx.currentTime + 0.02;
+    for (let i = 0; i < 34; i++) {
+      const t0 = at + Math.random() * 0.03;
+      const out = placed((Math.random() - 0.5) * 7, -0.6, -1 - Math.random() * 5);
+      burst(t0, { type: 'bandpass', freq: 1400 + Math.random() * 1600, q: 0.9, peak: 0.16, decay: 0.07, out });
+      const body = ctx.createOscillator();
+      body.frequency.setValueAtTime(150 + Math.random() * 90, t0);
+      body.frequency.exponentialRampToValueAtTime(70, t0 + 0.12);
+      const env = ctx.createGain();
+      env.gain.setValueAtTime(0.0001, t0);
+      env.gain.linearRampToValueAtTime(0.11, t0 + 0.004);
+      env.gain.exponentialRampToValueAtTime(0.0005, t0 + 0.18);
+      body.connect(env);
+      env.connect(out);
+      body.start(t0);
+      body.stop(t0 + 0.2);
+    }
+    const thump = ctx.createOscillator(); // the floor answers
+    thump.frequency.setValueAtTime(58, at);
+    thump.frequency.exponentialRampToValueAtTime(34, at + 0.35);
+    const thumpEnv = ctx.createGain();
+    thumpEnv.gain.setValueAtTime(0.7, at);
+    thumpEnv.gain.exponentialRampToValueAtTime(0.0005, at + 0.5);
+    thump.connect(thumpEnv);
+    thumpEnv.connect(master);
+    thump.start(at);
+    thump.stop(at + 0.55);
+  }
+
   function stinger() {
     const at = ctx.currentTime + 0.01;
     playSample('slam', { at, gain: 1.4 });
@@ -791,6 +823,10 @@ export function createAudio() {
     stinger() {
       resume();
       stinger();
+    },
+    slap() {
+      resume();
+      deskSlap();
     },
     slideDoor() {
       resume();

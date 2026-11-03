@@ -333,7 +333,28 @@ const KEEP =
   'Keep everything else exactly the same: same camera position and angle, same lighting, same objects, same photographic style.';
 
 const FINAL_CLASSROOM =
-  'Also lower the camera to just above the floor, about 10 cm high and looking slightly up, so the desks, chairs and chalkboard tower overhead. On the desk nearest the camera lies one exam paper covered in red pen marks. The narrow column at the right edge of the chalkboard stays clearly visible.';
+  'Also lower the camera to the eye height of a small child, about 70 cm, looking slightly up, so the desks and the chalkboard feel too big. On every chair lies a neatly folded white school shirt, as if the whole class took off their uniforms and left. On the desk nearest the camera lies one exam paper covered in red pen marks. The narrow column at the right edge of the chalkboard stays clearly visible.';
+
+// Uniforms nobody is wearing, placed walk by walk so no room is ever the same twice.
+const TRACES = {
+  1: {
+    corridor: 'A white short-sleeved school shirt hangs from one window grille, swaying slightly, as if someone just hung it there.',
+    door: 'A pair of white sneakers stands side by side on the wet floor right in front of the door, toes pointing at it, as if someone is waiting to go in.',
+    office: "A white school shirt and navy trousers are draped over the chair in front of the teacher's desk, as if a student was called in and is still sitting there.",
+  },
+  2: {
+    corridor: 'A white school shirt now hangs from every window grille along the whole corridor, all of them perfectly still.',
+    door: "Through the door's small glass window, rows of white school shirts can be seen inside the classroom, all perfectly still.",
+  },
+};
+
+// The last classroom fills up: a class with its back to you, and then it turns around.
+const CROWD_SEATED = `Every seat is now taken: at each desk sits a tall, adult-sized humanoid figure in a white short-sleeved Taiwanese school shirt with navy trim, with navy trousers or a pleated navy-plaid skirt, sitting perfectly still and upright, facing the chalkboard with its back to the camera. Their hair is black and their posture is a little too stiff. ${'Keep everything else exactly the same: same camera position and angle, same lighting, same room, same photographic style.'}`;
+const CROWD_TURNED = [
+  'Every seated figure has twisted its head around to stare straight at the camera over its shoulder, necks bent at impossible angles. Where each face should be there is only a smooth, blank, pale oval like unpainted plaster, each one slightly lopsided and warped, a few cracked, no eyes, no nose, no mouth. Keep everything else exactly the same: same camera position and angle, same lighting, same room, same photographic style.',
+  'Every seated figure has twisted its head around to stare straight at the camera over its shoulder, necks bent at impossible angles. Where each face should be there is only a smooth, blank, pale oval like unpainted plaster, no eyes, no nose, no mouth. Keep everything else exactly the same: same camera position and angle, same lighting, same room, same photographic style.',
+  'Every seated figure has turned around in its chair to face the camera. Each head is entirely wrapped in crumpled exam papers covered in red pen marks, like a tight paper mask; no face is visible. Keep everything else exactly the same: same camera position and angle, same lighting, same room, same photographic style.',
+];
 
 // The creatures are near-human and dressed as people from the school, and never have a face.
 const TEACHER_CLOTHES = 'a beige knitted cardigan over a pale shirt, dark slacks, black leather shoes';
@@ -375,7 +396,7 @@ Reply with JSON only:
 "pa":"one short school PA announcement asking the student on duty to come to the teachers' office now, in the player's language, without any name",
 "pa_en":"the same announcement in natural English",
 "scores":[{"subject":"an exam subject in the player's language","subject_en":"the subject in English","score":a low score between 38 and 59}]}
-Give three scores and one thread per memory.`;
+Give three scores and one thread per memory. Every memory must become at least one concrete, clearly visible physical detail in the photo details (put it in the photo where it belongs), so the player recognises their own school at once.`;
 
 const CARDS_SYSTEM = `You deal the choices in "Last One Out", a quiet horror game set in a remembered Taiwanese school at night. The player, the student on duty, walks the school three times. At the end of a walk three half-erased lines are on a chalkboard; the player keeps one, and that line decides how the next walk has changed.
 You get the memory bible (memories, era, threads that must come back changed), the walk being prepared, the changes already made, and the photos the next walk reuses.
@@ -383,7 +404,7 @@ Walk 2 goes corridor -> classroom door -> teachers' office. Things are clearly w
 Walk 3 goes corridor -> classroom door -> classroom, and it is the last. What hurt comes back through traces and space, never in person: a school uniform hanging on every chair, every desk pushed away from one desk left alone, every chair turned to face the camera, exam papers stacked to the ceiling, the shadows of a whole class on the floor with nobody casting them, a dark adult silhouette far away with its back turned. Bring back a memory thread at its worst.
 Look at the photos. Every instruction must name things that are really in that photo and be doable as an edit of it, clearly visible. The teachers' office has not been photographed yet: its instruction is a detail to add to its first photo.
 The image editor refuses any picture of children or students, so classmates never appear in person. Uniforms are Taiwanese, mixed boys' and girls': white short-sleeved shirts with navy trim, navy trousers or pleated navy-plaid skirts; no crests, badges, names or numbers. Shoes are white sneakers and canvas shoes. Never show a face. Never add ghosts, blood, injury, death, religion, politics, flags, statues or readable text. Never repeat a previous change. The three lines must be very different from each other.
-Each line gives one instruction per photo of the next walk; leave one empty ("") for a photo that should stay as it is, but change at least two photos.
+Each line gives one instruction for every photo of the next walk: every place must look different from the last time the player saw it.
 Reply with JSON only:
 {"cards":[{"title":"at most 6 words in the player's language","whisper":"one short eerie line in the player's language","title_en":"the title in natural English","whisper_en":"the line in natural English","edits":{"<photo id>":"precise English instruction, or empty"},"sound":"none|silence|echo|bell|ball|laughter|giggle|running|chalk|chair|papers|speaker|water"}]}
 Sounds: ball = a ball bounces and rolls down the corridor; laughter = children playing somewhere out of sight; giggle = a child giggles nearby, unseen; running = small feet run past behind you; chalk = chalk scratching on a board; chair = a chair dragged across the floor; papers = sheets of paper shuffled; speaker = the school speaker crackles; water = dripping; bell = the school bell; echo = every step echoes far too long; silence = all sound stops.`;
@@ -751,16 +772,25 @@ async function teacherScare(school) {
   }
 }
 
-// The second scare: the lights go out and everything in the classroom faces you.
-async function lightsOutScare(classroomId) {
-  if (MOCK) return `/photos/${await savePhoto(mockPhoto('classroom', { walk: 2, changes: [], note: 'scare: lights out, everything faces you' }))}`;
+// The second scare. The classroom you walk into is full, backs to you; at roll call
+// every head turns. If the crowd is refused, the lights go out instead.
+async function crowdFrames(classroomId) {
+  if (MOCK) {
+    const [seated, turned] = await Promise.all(
+      ['crowd: a class with its back to you', 'scare: every head turns to you'].map((note) => savePhoto(mockPhoto('classroom', { walk: 2, changes: [], note }))),
+    );
+    return { seated: `/photos/${seated}`, turned: `/photos/${turned}` };
+  }
   try {
-    const id = await firstAcceptedEdit(classroomId, LIGHTS_OUT);
-    return id && `/photos/${id}`;
+    const seated = await firstAcceptedEdit(classroomId, [CROWD_SEATED]);
+    const turned = seated && (await firstAcceptedEdit(seated, CROWD_TURNED));
+    if (seated && turned) return { seated: `/photos/${seated}`, turned: `/photos/${turned}` };
+    const dark = await firstAcceptedEdit(classroomId, LIGHTS_OUT);
+    return { seated: null, turned: dark && `/photos/${dark}` };
   } catch (err) {
     if (err.status === 402) throw err;
-    console.error(`[scare] lights out: ${err.message}`);
-    return null;
+    console.error(`[scare] crowd: ${err.message}`);
+    return { seated: null, turned: null };
   }
 }
 
@@ -776,9 +806,9 @@ async function renderOption(school, loop, card) {
       const previous = school.photos[id];
       let photoId = previous;
       if (MOCK) photoId = await savePhoto(mockPhoto(id, { walk: loop, changes }));
-      else if (!previous) photoId = await takePhoto(id, school, card.edits[id]); // first time in this room
+      else if (!previous) photoId = await takePhoto(id, school, [card.edits[id], TRACES[loop]?.[id]].filter(Boolean).join(' ')); // first time in this room
       else {
-        const instruction = [card.edits[id], last && id === 'classroom' ? FINAL_CLASSROOM : ''].filter(Boolean).join(' ');
+        const instruction = [card.edits[id], TRACES[loop]?.[id], last && id === 'classroom' ? FINAL_CLASSROOM : ''].filter(Boolean).join(' ');
         if (instruction) photoId = (await editScene(id, previous, instruction)) ?? previous;
       }
       photoIds[id] = photoId;
@@ -787,16 +817,27 @@ async function renderOption(school, loop, card) {
   );
   const [flicker, scare] = await Promise.all([
     flickerFrame(photoIds.corridor, loop),
-    loop === 1 ? school.scare1 : lightsOutScare(photoIds.classroom),
+    loop === 1 ? school.scare1 : crowdFrames(photoIds.classroom),
   ]);
+  const scenes = ids.map((id) => views[id]);
+  let frame = null;
+  if (loop === 1 && scare) frame = { after: 'door', kind: 'teacher', photo: scare };
+  if (last && scare?.turned) {
+    frame = { after: 'classroom', kind: scare.seated ? 'turn' : 'dark', photo: scare.turned };
+    if (scare.seated) {
+      // You walk into the full room; once they have turned, it is empty again.
+      const i = ids.indexOf('classroom');
+      scenes[i] = { ...scenes[i], photo: scare.seated, after: scenes[i].photo };
+    }
+  }
   return {
     card,
     photoIds,
     walk: {
       index: loop,
-      scenes: ids.map((id) => views[id]),
+      scenes,
       flicker: flicker ? { scene: 'corridor', photo: flicker } : null,
-      scare: scare ? { after: loop === 1 ? 'door' : 'classroom', photo: scare } : null,
+      scare: frame,
     },
   };
 }
@@ -1026,7 +1067,7 @@ async function saveRun(school, ending) {
     school.record.walks.map(async (walk) => ({
       ...walk,
       scenes: await Promise.all(
-        walk.scenes.map(async (scene) => ({ ...scene, photo: await local(scene.photo), depth: await local(scene.depth) })),
+        walk.scenes.map(async (scene) => ({ ...scene, photo: await local(scene.photo), depth: await local(scene.depth), after: await local(scene.after) })),
       ),
       flicker: await frame(walk.flicker),
       scare: await frame(walk.scare),

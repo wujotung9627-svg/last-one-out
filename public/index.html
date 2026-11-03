@@ -47,11 +47,13 @@
         <label for="name" data-text="nameLabel"></label>
         <input id="name" maxlength="20" autocomplete="off" required>
         <p class="hint" data-text="nameHint"></p>
+        <label for="year" data-text="yearLabel"></label>
+        <input id="year" type="number" inputmode="numeric" min="1950" step="1">
         <fieldset>
           <legend data-text="memoriesLabel"></legend>
-          <input id="m1" maxlength="200" data-aria="memory1" data-placeholder="memory1">
-          <input id="m2" maxlength="200" data-aria="memory2" data-placeholder="memory2">
-          <input id="m3" maxlength="200" data-aria="memory3" data-placeholder="memory3">
+          <div class="memory"><div class="memory-row"><input id="m1" maxlength="200" data-placeholder="memory1"><button type="button" class="mic" data-for="m1" data-text="speak" data-aria="speakLabel" hidden></button></div><div class="chips" data-slot="1"></div></div>
+          <div class="memory"><div class="memory-row"><input id="m2" maxlength="200" data-placeholder="memory2"><button type="button" class="mic" data-for="m2" data-text="speak" data-aria="speakLabel" hidden></button></div><div class="chips" data-slot="2"></div></div>
+          <div class="memory"><div class="memory-row"><input id="m3" maxlength="200" data-placeholder="memory3"><button type="button" class="mic" data-for="m3" data-text="speak" data-aria="speakLabel" hidden></button></div><div class="chips" data-slot="3"></div></div>
         </fieldset>
         <button type="submit" data-text="start"></button>
         <p class="headphones" data-text="headphones"></p>
@@ -62,13 +64,20 @@
       <div id="stage">
         <img id="photo" alt="">
         <img id="photo-next" alt="" aria-hidden="true">
+        <img id="flash" alt="" aria-hidden="true">
         <canvas id="gl" aria-hidden="true" hidden></canvas>
+        <div id="marks" aria-hidden="true"></div>
+        <canvas id="tv" aria-hidden="true" hidden></canvas>
         <div id="board-name" hidden></div>
         <div id="board-choices" hidden></div>
-        <div id="date-stamp" aria-hidden="true"></div>
+        <div id="door-gap" aria-hidden="true" hidden></div>
+        <div id="ball" aria-hidden="true" hidden></div>
         <div id="hotspots"></div>
+        <img id="scare" alt="" aria-hidden="true" hidden>
+        <div id="date-stamp" aria-hidden="true"></div>
       </div>
-      <p id="whisper"></p>
+      <p id="whisper" aria-live="polite"></p>
+      <div id="roll" hidden><button id="roll-here" type="button" data-text="here"></button></div>
     </section>
 
     <section id="card-screen" class="screen" hidden>
@@ -88,6 +97,8 @@
       </div>
     </section>
 
+    <div id="intro" hidden><p id="intro-line"></p></div>
+    <div id="credits" hidden><div id="credits-list"></div><p id="credits-skip"></p></div>
     <div id="loading" hidden><p id="loading-text"></p></div>
     <p id="error" role="alert" hidden></p>
   </main>
