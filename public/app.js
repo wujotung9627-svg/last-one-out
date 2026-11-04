@@ -61,6 +61,7 @@ const LINES = {
     headphones: 'Wear headphones. Allow the microphone: you will be asked to answer.',
     dutyToday: 'ON DUTY TODAY  ',
     onDuty: 'On duty',
+    otherPhoto: '(click it for the other one)',
     rollCall: 'Answer when your name is called.',
     here: 'Here',
     wrongAnswer: 'That is not how you answer.',
@@ -121,6 +122,7 @@ const LINES = {
     headphones: '請戴上耳機，並允許使用麥克風：等一下會有人點你的名。',
     dutyToday: '本日值日生　',
     onDuty: '值日生',
+    otherPhoto: '（點照片看另一張）',
     rollCall: '點到名要答「有」。',
     here: '有',
     wrongAnswer: '不是這樣答的。',
@@ -614,6 +616,30 @@ function rattle() {
   );
 }
 
+// Writing, papers and the name are laid on the photo in pixels. When the picture changes
+// size (the window resized, full screen), they are laid again, so they stay where they
+// belong instead of drifting and then jumping back.
+let refitTimer = null;
+
+function refitOverlays() {
+  clearTimeout(refitTimer);
+  refitTimer = setTimeout(async () => {
+    const scene = state.walk && currentScene();
+    if (!scene || scene.pending || $('#walk-screen').hidden) return;
+    if (!$('#board-name').hidden) placeName(scene, state.answered);
+    if ($('#marks').children.length) placeMarks(scene);
+    const layer = $('#board-choices');
+    if (!layer.hidden && scene.board) {
+      const plane = await boardPlane(scene);
+      if (sameScene(currentScene(), scene)) {
+        layer.style.transform = plane.transform;
+        layer.plane = plane;
+      }
+    }
+  }, 150);
+}
+if (typeof ResizeObserver === 'function') new ResizeObserver(refitOverlays).observe($('#stage'));
+
 // The page writes the name itself; it is never sent to a model.
 const BLUR_BY_WALK = [2.4, 1.8, 1.4];
 
@@ -630,17 +656,78 @@ async function placeName(scene, sharp = false) {
   const at = (x, y, width, height) =>
     Object.assign(label.style, { left: '0', top: '0', width: `${width}px`, height: `${height}px`, transformOrigin: '0 0', transform: `${transform} translate(${x}px, ${y}px)` });
   // The narrow column at the board's right edge, where the student on duty is written,
-  // top to bottom, in either language (English lies on its side, as it would there).
+  // top to bottom, in either language (English lies on its side, as it would there):
+  // between its own two ruled lines, found in the photo, below its heading cell.
   label.className = 'vertical';
   const zh = state.lang === 'zh';
   const chars = [...`${t('onDuty')}  ${state.name}`].length * (zh ? 1 : 0.66);
+  const column = await nameColumn(scene);
+  if (!sameScene(currentScene(), scene)) return;
+  const [u0, u1] = column ?? [0.9, 0.98];
+  const width = (u1 - u0) * BW;
   // Only the top of the column: below it, the heads of a seated class would cover it.
-  at(BW * 0.9, BH * 0.05, BW * 0.08, BH * 0.55);
-  label.style.fontSize = `${Math.max(8, Math.min(BW * 0.055, (BH * 0.55) / (chars + 1)))}px`;
+  at(u0 * BW + width * 0.1, BH * 0.1, width * 0.8, BH * 0.5);
+  label.style.fontSize = `${Math.max(8, Math.min(width * 0.7, (BH * 0.5) / (chars + 1)))}px`;
   label.replaceChildren(el('span', zh ? t('onDuty') : `${t('onDuty')}:`), el('span', state.name, 'who'));
   const blur = sharp ? 0 : BLUR_BY_WALK[Math.min(state.walk.index, BLUR_BY_WALK.length - 1)];
   label.style.filter = blur ? `blur(${blur}px)` : 'none';
   label.hidden = false;
+}
+
+// The ruled column at the right of the chalkboard: two bright vertical lines close
+// together near its right edge, as [left, right] across the board (0 to 1). Null when
+// the photo does not show them clearly.
+const columnCache = new Map();
+
+function nameColumn(scene) {
+  const key = `${scene.photo}|${scene.board.x.toFixed(4)}|${scene.board.y.toFixed(4)}`;
+  if (!columnCache.has(key)) columnCache.set(key, findColumn(scene).catch(() => null));
+  return columnCache.get(key);
+}
+
+async function findColumn(scene) {
+  const corners = (await sheetCorners(scene.photo, scene.board, 'board')) ?? boxCorners(scene.board);
+  const img = await loadPicture(scene.photo);
+  const W = 640, H = Math.round((640 * img.naturalHeight) / img.naturalWidth);
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const g = canvas.getContext('2d', { willReadFrequently: true });
+  g.drawImage(img, 0, 0, W, H);
+  const px = g.getImageData(0, 0, W, H).data;
+  const [tl, tr, br, bl] = corners;
+  const light = (u, v) => {
+    const x = (tl[0] * (1 - u) + tr[0] * u) * (1 - v) + (bl[0] * (1 - u) + br[0] * u) * v;
+    const y = (tl[1] * (1 - u) + tr[1] * u) * (1 - v) + (bl[1] * (1 - u) + br[1] * u) * v;
+    const i = (Math.min(H - 1, Math.max(0, Math.round(y * (H - 1)))) * W + Math.min(W - 1, Math.max(0, Math.round(x * (W - 1))))) * 4;
+    return (px[i] + px[i + 1] + px[i + 2]) / 3;
+  };
+  // Brightness down each line across the right part of the board.
+  const N = 90, from = 0.72, to = 0.995;
+  const profile = [];
+  for (let k = 0; k <= N; k++) {
+    const u = from + ((to - from) * k) / N;
+    let sum = 0, n = 0;
+    for (let v = 0.2; v <= 0.8; v += 0.02) {
+      sum += light(u, v);
+      n += 1;
+    }
+    profile.push({ u, b: sum / n });
+  }
+  const base = [...profile].map((p) => p.b).sort((a, z) => a - z)[profile.length >> 1];
+  const peaks = profile.filter((p, k) => k > 0 && k < N && p.b >= profile[k - 1].b && p.b >= profile[k + 1].b && p.b > base + 14);
+  let best = null;
+  for (const a of peaks)
+    for (const b of peaks) {
+      const gap = b.u - a.u;
+      if (gap < 0.03 || gap > 0.14) continue;
+      // Between them the board itself: darker than the lines.
+      const inside = profile.filter((p) => p.u > a.u + 0.008 && p.u < b.u - 0.008);
+      if (!inside.length || Math.max(...inside.map((p) => p.b)) > Math.min(a.b, b.b) - 6) continue;
+      const score = a.b + b.b + b.u * 40; // the rightmost clear pair
+      if (!best || score > best.score) best = { score, u0: a.u, u1: b.u };
+    }
+  return best ? [best.u0, best.u1] : null;
 }
 
 // Your exam papers carry your name and a red score; the ranking sheet has you last.
@@ -1517,20 +1604,39 @@ async function ballThenFigure() {
       flash.dataset.src = figure.photo;
       await flash.decode().catch(() => {});
     }
-    // The ball rolls all the way to your feet first. Only when you look up from it is
-    // someone standing in the corridor.
+    // The ball takes your eyes all the way down to your feet. Then, without warning,
+    // someone comes out of the far end of the corridor straight at you, and it is dark.
     await rollBall({ toFeet: true });
-    await pause(900);
-    if (sameScene(currentScene(), scene) && figure?.photo) {
-      flash.getAnimations().forEach((a) => a.cancel());
-      flash.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 700, easing: 'ease-out', fill: 'forwards' }); // silently
+    await pause(700);
+    if (!sameScene(currentScene(), scene) || !figure?.photo) return;
+    for (const id of ['#ball', '#ball-shadow', '#ball-reflection']) $(id).hidden = true;
+    state.audio?.stinger();
+    flash.getAnimations().forEach((a) => a.cancel());
+    if (REDUCED_MOTION) {
+      flash.style.opacity = '1';
+      await pause(600);
+    } else {
+      const { vx, vy } = await floorPath(scene); // it comes from where the corridor ends
+      flash.style.transformOrigin = `${vx * 100}% ${vy * 100}%`;
+      $('#stage').animate(
+        [0, 1, 2, 3, 4, 5, 6, 7].map((i) => ({ transform: `translate(${(Math.random() - 0.5) * 16 * (i / 7)}px, ${(Math.random() - 0.5) * 10 * (i / 7)}px)` })),
+        { duration: 520 },
+      );
+      await flash.animate(
+        [
+          { opacity: 1, transform: 'scale(1)', filter: 'brightness(1.7) contrast(1.2)' },
+          { opacity: 1, transform: 'scale(1.15)', filter: 'brightness(1.1)', offset: 0.5 },
+          { opacity: 1, transform: 'scale(1.7)', filter: 'brightness(0.9) blur(2px)' },
+        ],
+        { duration: 520, easing: 'cubic-bezier(0.55, 0, 0.9, 0.5)', fill: 'forwards' },
+      ).finished;
     }
-    await pause(3200);
-    if (!sameScene(currentScene(), scene)) return;
-    flicker();
-    await pause(140);
     flash.getAnimations().forEach((a) => a.cancel());
     flash.style.opacity = '';
+    flash.style.transformOrigin = '';
+    $('#stage').classList.add('blackout');
+    await pause(450);
+    $('#stage').classList.remove('blackout');
   } finally {
     state.busy = false;
   }
@@ -1551,11 +1657,12 @@ async function tvStatic(scene, on) {
   // without it, the middle of the set, never its casing.
   const tv = scene.tv;
   const screen = scene.screen && boxOverlap(scene.screen, tv) > 0.6 ? scene.screen : { x: tv.x + tv.w * 0.14, y: tv.y + tv.h * 0.16, w: tv.w * 0.62, h: tv.h * 0.6 };
-  const corners = boxCorners({ x: screen.x + screen.w * 0.04, y: screen.y + screen.h * 0.05, w: screen.w * 0.92, h: screen.h * 0.9 });
+  const inner = { x: screen.x + screen.w * 0.04, y: screen.y + screen.h * 0.05, w: screen.w * 0.92, h: screen.h * 0.9 };
   if (!sameScene(currentScene(), scene) || !canvas.want) return;
   canvas.width = 96;
   canvas.height = 72;
-  Object.assign(canvas.style, { left: '0', top: '0', width: '96px', height: '72px', transformOrigin: '0 0', transform: onCorners(96, 72, toStage(corners)) });
+  // In shares of the picture, so it stays on the screen when the window changes size.
+  Object.assign(canvas.style, { left: `${inner.x * 100}%`, top: `${inner.y * 100}%`, width: `${inner.w * 100}%`, height: `${inner.h * 100}%`, transform: 'none' });
   canvas.hidden = false;
   const g = canvas.getContext('2d');
   const image = g.createImageData(96, 72);
@@ -2235,8 +2342,48 @@ function renderBook() {
     $('#book'),
     { ...state.ending, ...report, comment_en: state.lang === 'en' ? report.comment : state.ending.comment_en, scores: state.bible?.scores, name: state.name, date: bookDate(), lang: state.lang },
     $('#hide-name').checked,
-  );
+  ).then((drawn) => {
+    bookPhotos = drawn?.photos ?? [];
+    return drawn;
+  });
 }
+
+// The two photos taped into the book, then and now: click one to see it large, click
+// the large one to turn to the other, click beside it (or Esc) to put it back.
+let bookPhotos = [];
+
+function photoAt(event) {
+  const canvas = $('#book');
+  const r = canvas.getBoundingClientRect();
+  const x = ((event.clientX - r.left) / r.width) * canvas.width;
+  const y = ((event.clientY - r.top) / r.height) * canvas.height;
+  return [...bookPhotos].reverse().find((p) => x >= p.x && x <= p.x + p.w && y >= p.y && y <= p.y + p.h) ?? null; // the one on top first
+}
+
+function showBookPhoto(index) {
+  const photo = bookPhotos[index];
+  if (!photo?.src) return;
+  const view = $('#photo-view');
+  view.dataset.index = String(index);
+  $('#photo-view-img').src = photo.src;
+  $('#photo-view-caption').textContent = `${photo.caption}　${t('otherPhoto')}`;
+  view.hidden = false;
+}
+
+$('#book').addEventListener('mousemove', (event) => {
+  $('#book').style.cursor = photoAt(event) ? 'zoom-in' : '';
+});
+$('#book').addEventListener('click', (event) => {
+  const photo = photoAt(event);
+  if (photo) showBookPhoto(bookPhotos.indexOf(photo));
+});
+$('#photo-view').addEventListener('click', (event) => {
+  if (event.target.id === 'photo-view-img' && bookPhotos.length > 1) showBookPhoto((Number($('#photo-view').dataset.index) + 1) % bookPhotos.length);
+  else $('#photo-view').hidden = true;
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') $('#photo-view').hidden = true;
+});
 
 // The afternoon after. The teacher watches from the door while the credits roll; when
 // they end, nobody is there. Then the title, and below it tonight's contact book.

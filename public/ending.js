@@ -377,6 +377,14 @@ export async function drawContactBook(canvas, book, hideName) {
 
   const [first, last] = await Promise.all([loadImage(book.first), loadImage(book.last)]);
   const below = scored.length ? top + head + rowH * (scored.length + 1) + 12 : 250;
+  const lower = Math.min(below + 140, split - 250);
   tapedPhoto(c, first, 92, below, 300, 200, -0.05, f.then, english);
-  tapedPhoto(c, last, 120, Math.min(below + 140, split - 250), 300, 200, 0.04, f.now, english);
+  tapedPhoto(c, last, 120, lower, 300, 200, 0.04, f.now, english);
+  // Where the two photos are on the page (frame included), so the page can open them.
+  return {
+    photos: [
+      { x: 82, y: below - 10, w: 320, h: 246, src: book.first, caption: f.then },
+      { x: 110, y: lower - 10, w: 320, h: 246, src: book.last, caption: f.now },
+    ],
+  };
 }

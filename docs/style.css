@@ -400,6 +400,11 @@ html:lang(en) #whisper, html:lang(en) #ending-line, html:lang(en) #card-prompt, 
 #report { display: grid; gap: 12px; justify-items: center; width: 100%; scroll-margin-top: 16px; }
 #ending-line { margin: 0; font-family: var(--kai); font-size: 1.5rem; text-align: center; }
 #book { width: min(100%, 960px); height: auto; }
+/* A photo from the book, large: click it for the other one, click beside it to close. */
+#photo-view { position: fixed; inset: 0; z-index: 30; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 16px; background: rgba(0, 0, 0, 0.88); cursor: zoom-out; }
+#photo-view img { max-width: min(92vw, 1200px); max-height: 80vh; border: 12px solid #f4f1e8; border-bottom-width: 40px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7); cursor: pointer; }
+#photo-view p { margin: 14px 0 0; color: #e8e3d0; font: 1.4rem var(--hand-zh); letter-spacing: 0.05em; }
+html:lang(en) #photo-view p { font-family: var(--hand-en); font-size: 1.6rem; }
 .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: center; }
 .row label { display: inline-flex; align-items: center; gap: 8px; font-size: 0.9rem; letter-spacing: normal; text-transform: none; color: var(--fg); }
 .row input[type="checkbox"] { width: auto; }
