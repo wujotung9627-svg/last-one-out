@@ -1517,9 +1517,12 @@ async function tvStatic(scene, on) {
     canvas.hidden = true;
     return;
   }
-  // The screen is the dark glass inside the set; without it, no static.
-  const corners = await sheetCorners(scene.photo, scene.tv, 'board');
-  if (!corners || !sameScene(currentScene(), scene) || !canvas.want) return;
+  // Only on the screen itself: SAM's "television screen", a little inside its edge;
+  // without it, the middle of the set, never its casing.
+  const tv = scene.tv;
+  const screen = scene.screen && boxOverlap(scene.screen, tv) > 0.6 ? scene.screen : { x: tv.x + tv.w * 0.14, y: tv.y + tv.h * 0.16, w: tv.w * 0.62, h: tv.h * 0.6 };
+  const corners = boxCorners({ x: screen.x + screen.w * 0.04, y: screen.y + screen.h * 0.05, w: screen.w * 0.92, h: screen.h * 0.9 });
+  if (!sameScene(currentScene(), scene) || !canvas.want) return;
   canvas.width = 96;
   canvas.height = 72;
   Object.assign(canvas.style, { left: '0', top: '0', width: '96px', height: '72px', transformOrigin: '0 0', transform: onCorners(96, 72, toStage(corners)) });

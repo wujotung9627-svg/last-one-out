@@ -613,7 +613,7 @@ html:lang(en) .chip { font: 1rem var(--hand-en); }
 #stage.blackout #date-stamp { opacity: 0.35; }
 
 /* The old television's static. */
-#tv { position: absolute; z-index: 1; mix-blend-mode: screen; opacity: 0.8; pointer-events: none; image-rendering: pixelated; }
+#tv { position: absolute; z-index: 1; mix-blend-mode: screen; opacity: 0.8; pointer-events: none; image-rendering: pixelated; border-radius: 9% / 12%; }
 #tv[hidden] { display: none; }
 
 /* A basketball out of the dark, drawn as a lit sphere each frame. */
