@@ -1638,11 +1638,12 @@ async function measureOpening(scene, url) {
     if (count < W * H * 0.01) continue;
     const patch = { x: x0 / W, y: y0 / H, w: (x1 + 1 - x0) / W, h: (y1 + 1 - y0) / H };
     // The door it belongs to: the SAM door the change lies on or right beside (a door
-    // sliding aside opens the doorway next to where its box was).
+    // sliding aside opens the doorway next to where its box was; a box hidden at its foot
+    // by something in front still stands on the floor below).
     const cover = (d) => {
-      const dx = d.x - d.w * 0.6, dw = d.w * 2.2;
+      const dx = d.x - d.w * 0.6, dw = d.w * 2.2, dh = d.h * 1.5;
       const w = Math.max(0, Math.min(dx + dw, patch.x + patch.w) - Math.max(dx, patch.x));
-      const h = Math.max(0, Math.min(d.y + d.h, patch.y + patch.h) - Math.max(d.y, patch.y));
+      const h = Math.max(0, Math.min(d.y + dh, patch.y + patch.h) - Math.max(d.y, patch.y));
       return (w * h) / (patch.w * patch.h);
     };
     const door = [...doors].sort((p, q) => cover(q) - cover(p))[0];
