@@ -390,12 +390,10 @@ async function replayApi(path, body) {
   switch (path) {
     case '/api/school':
       replayCursor = 0;
-      await pause(1200);
       return { schoolId: 'replay', lang: run.lang, draws: run.draws.length, bible: run.bible, walk: run.walks[0] };
     case '/api/draw': {
       const draw = run.draws[replayCursor];
       replayCursor += 1;
-      await pause(1500);
       return {
         cards: arrange(draw.cards, draw.picked, body.index),
         picked: body.index,
@@ -410,7 +408,6 @@ async function replayApi(path, body) {
     case '/api/erase':
       return { ok: true };
     case '/api/ending':
-      await pause(1200);
       return run.ending;
     default:
       throw new Error('Not available in the replay.');
@@ -1149,6 +1146,20 @@ function choose(index) {
   );
 }
 
+// When the next place is not ready yet: no message. The lights go down and you keep
+// walking in the dark until it is there (render() brings the light back).
+function waitInTheDark(ready) {
+  let done = false;
+  ready.finally?.(() => {
+    done = true;
+  });
+  setTimeout(() => {
+    if (done) return;
+    $('#stage').classList.add('blackout');
+    const steps = setInterval(() => (done ? clearInterval(steps) : state.audio?.footsteps(2)), 1600);
+  }, 400);
+}
+
 function walkBack() {
   const pick = state.pick;
   if (!pick) {
@@ -1156,7 +1167,8 @@ function walkBack() {
     return;
   }
   state.audio?.creak();
-  return guarded(pick.done ? '' : t('changing'), async () => {
+  return guarded('', async () => {
+    if (!pick.done) waitInTheDark(pick.promise);
     const res = await pick.promise;
     const card = res.cards[res.picked];
     state.last = res.last;
@@ -1815,8 +1827,8 @@ async function advance(spot) {
   try {
     let scene = state.walk.scenes[next];
     if (scene.pending) {
-      loading(t('remembering'));
-      scene = await state.walk.filling[next].finally(() => loading(null));
+      waitInTheDark(state.walk.filling[next]);
+      scene = await state.walk.filling[next];
     }
     // Only the second walk has someone behind the door; wait for that frame, never longer.
     if (from.id === 'door' && state.walk.pending && state.walk.index === 1) await extraOf(state.walk, 'scare', 8000);
