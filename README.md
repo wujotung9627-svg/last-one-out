@@ -46,6 +46,7 @@ browser (public/)                                server.mjs (Node, no packages) 
 - The image model refuses pictures of children, so the class is drawn as adult-sized figures in Taiwanese uniforms, seen from behind, whose faces are never shown (blank plaster ovals or heads wrapped in marked exam papers). Every scare prompt has fallbacks, and every edit is sent together with a plainer fallback and a change the model always accepts, so a refusal never adds a wait.
 - `scripts/build-demo.mjs <run id>` turns a finished, recorded walk into `docs/`, a static replay that needs no server and makes no model calls, in either language.
 - `scripts/smoke.mjs` walks the whole game through the API in mock mode; CI runs it on every push and pull request.
+- `video/` makes the demo video from one recorded live game: Muse Spark watches the recording and picks the trailer's shots and title cards (see `video/README.md`).
 
 ## Run it
 
