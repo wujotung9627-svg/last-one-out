@@ -2,13 +2,13 @@
   "lang": "zh",
   "memories": [
     "走廊盡頭的大榕樹",
-    "總是叫錯我名字的導師",
-    "貼在公布欄上的月考排名"
+    "從來不叫我名字的導師",
+    "貼在牆上的月考排名"
   ],
   "memories_en": [
-    "the big banyan tree at the end of the corridor",
-    "the homeroom teacher who always got my name wrong",
-    "the monthly exam rankings pinned on the bulletin board"
+    "the banyan tree at the end of the corridor",
+    "the teacher who never said my name",
+    "the exam ranking pinned on the wall"
   ],
   "bible": {
     "year": 2008,
@@ -21,17 +21,17 @@
       {
         "subject": "英文",
         "subject_en": "English",
-        "score": 51
+        "score": 47
       },
       {
         "subject": "理化",
-        "subject_en": "Physical Science",
+        "subject_en": "Science",
         "score": 38
       }
     ],
     "pa": {
-      "zh": "值日生請現在到教職員辦公室一趟。",
-      "en": "Student on duty, please come to the teachers' office now."
+      "en": "Student on duty, please come to the teachers' office now.",
+      "zh": "值日生請現在到教職員辦公室一趟。"
     }
   },
   "walks": [
@@ -40,96 +40,89 @@
       "scenes": [
         {
           "id": "corridor",
-          "photo": "photos/d12e14d9469e.jpg",
-          "depth": "photos/79476b3341bc.webp",
+          "photo": "photos/cd885284287b.jpg",
+          "depth": "photos/846b16834bad.webp",
           "doors": [
             {
-              "x": 0.821875,
-              "y": 0.06875,
-              "w": 0.051041666666666666,
-              "h": 0.61796875,
-              "open": true
+              "x": 0.9057291666666667,
+              "y": 0.0921875,
+              "w": 0.06822916666666666,
+              "h": 0.778125
             },
             {
-              "x": 0.7526041666666666,
-              "y": 0.15,
-              "w": 0.025,
-              "h": 0.4296875,
-              "open": true
+              "x": 0.7994791666666666,
+              "y": 0.18125,
+              "w": 0.03802083333333333,
+              "h": 0.55
             },
             {
-              "x": 0.7088541666666667,
-              "y": 0.1875,
-              "w": 0.0203125,
-              "h": 0.3515625,
-              "open": true
+              "x": 0.7338541666666667,
+              "y": 0.24296875,
+              "w": 0.028125,
+              "h": 0.41484375
+            },
+            {
+              "x": 0.6614583333333334,
+              "y": 0.30390625,
+              "w": 0.026041666666666668,
+              "h": 0.278125
             }
           ]
         },
         {
           "id": "door",
-          "photo": "photos/ad0abe836ad4.jpg",
-          "depth": "photos/1fc973fe1611.webp",
+          "photo": "photos/dc562c74fd01.jpg",
+          "depth": "photos/526ee7b3d218.webp",
           "doors": [
             {
-              "x": 0.246875,
-              "y": 0.17265625,
-              "w": 0.15625,
-              "h": 0.5578125
+              "x": 0.6286458333333333,
+              "y": 0.16328125,
+              "w": 0.15052083333333333,
+              "h": 0.74140625,
+              "open": true
             },
             {
-              "x": 0.459375,
-              "y": 0.17890625,
-              "w": 0.125,
-              "h": 0.51796875
-            },
-            {
-              "x": 0.17447916666666666,
-              "y": 0.16953125,
-              "w": 0.084375,
-              "h": 0.5625
-            },
-            {
-              "x": 0.7645833333333333,
-              "y": 0.2828125,
-              "w": 0.042708333333333334,
-              "h": 0.2859375
+              "x": 0.3109375,
+              "y": 0.2484375,
+              "w": 0.11145833333333334,
+              "h": 0.49296875,
+              "open": true
             }
           ],
-          "opened": "photos/be3ff785d528.webp"
+          "opened": "photos/11c370cabad9.webp"
         },
         {
           "id": "classroom",
-          "photo": "photos/62898ccbe517.jpg",
-          "depth": "photos/aefd84e2258b.webp",
+          "photo": "photos/a3b1ea803f18.jpg",
+          "depth": "photos/370420f16be8.webp",
           "doors": [
             {
-              "x": 0.888,
-              "y": 0.18,
-              "w": 0.084,
-              "h": 0.43,
+              "x": 0.668,
+              "y": 0.14,
+              "w": 0.17,
+              "h": 0.42,
               "open": true
             }
           ],
           "board": {
-            "x": 0.2838541666666667,
-            "y": 0.128125,
-            "w": 0.4505208333333333,
-            "h": 0.2421875
+            "x": 0,
+            "y": 0.08828125,
+            "w": 0.42552083333333335,
+            "h": 0.2359375
           },
           "tv": {
-            "x": 0.7796875,
-            "y": 0.01640625,
-            "w": 0.11927083333333334,
-            "h": 0.15625
+            "x": 0.7317708333333334,
+            "y": 0,
+            "w": 0.09791666666666667,
+            "h": 0.109375
           },
-          "papers": [],
           "screen": {
-            "x": 0.786,
-            "y": 0.037,
-            "w": 0.079,
-            "h": 0.104
-          }
+            "x": 0.7411458333333333,
+            "y": 0,
+            "w": 0.05416666666666667,
+            "h": 0.0859375
+          },
+          "papers": []
         }
       ],
       "flicker": null,
@@ -140,134 +133,112 @@
       "scenes": [
         {
           "id": "corridor",
-          "photo": "photos/5183105f283e.webp",
-          "depth": "photos/cb8ac8a5ba07.webp",
+          "photo": "photos/e04ab4c72d0c.webp",
+          "depth": "photos/529abdd3ebdb.webp",
           "doors": [
             {
-              "x": 0.8208333333333333,
-              "y": 0.06796875,
-              "w": 0.051041666666666666,
-              "h": 0.61796875,
-              "open": true
+              "x": 0.7963541666666667,
+              "y": 0.1890625,
+              "w": 0.03802083333333333,
+              "h": 0.54140625
             },
             {
-              "x": 0.7515625,
-              "y": 0.1484375,
-              "w": 0.024479166666666666,
-              "h": 0.43125,
-              "open": true
+              "x": 0.7322916666666667,
+              "y": 0.25,
+              "w": 0.0265625,
+              "h": 0.4078125
+            },
+            {
+              "x": 0.6604166666666667,
+              "y": 0.3046875,
+              "w": 0.025,
+              "h": 0.27734375
             }
           ]
         },
         {
           "id": "door",
-          "photo": "photos/7b7761efab9f.webp",
-          "depth": "photos/5e4cc50d7e64.webp",
+          "photo": "photos/dbbcd8b261b7.webp",
+          "depth": "photos/f89231f18cb1.webp",
           "doors": [
             {
-              "x": 0.20260416666666667,
-              "y": 0.16875,
-              "w": 0.16041666666666668,
-              "h": 0.5671875,
+              "x": 0.6265625,
+              "y": 0.16328125,
+              "w": 0.15104166666666666,
+              "h": 0.7421875,
               "open": true
             },
             {
-              "x": 0.5208333333333334,
-              "y": 0.1640625,
-              "w": 0.05625,
-              "h": 0.5640625,
-              "open": true
-            },
-            {
-              "x": 0.7895833333333333,
-              "y": 0.28125,
-              "w": 0.0375,
-              "h": 0.290625,
-              "open": true
-            },
-            {
-              "x": 0.7572916666666667,
-              "y": 0.28359375,
-              "w": 0.0234375,
-              "h": 0.2890625,
-              "open": true
-            },
-            {
-              "x": 0.83125,
-              "y": 0.3171875,
-              "w": 0.030729166666666665,
-              "h": 0.2078125,
+              "x": 0.30833333333333335,
+              "y": 0.246875,
+              "w": 0.11510416666666666,
+              "h": 0.49609375,
               "open": true
             }
           ],
-          "opened": "photos/f26ff791153f.webp"
+          "opened": "photos/0cf6e8922dcd.webp"
         },
         {
           "id": "office",
-          "photo": "photos/c5b09d23cc2f.jpg",
-          "depth": "photos/2636464c565c.webp",
+          "photo": "photos/9cbf61416988.jpg",
+          "depth": "photos/3043d6607da5.webp",
           "doors": [
             {
-              "x": 0.11979166666666667,
-              "y": 0.0328125,
-              "w": 0.109375,
-              "h": 0.75703125
+              "x": 0.0,
+              "y": 0.0,
+              "w": 0.3,
+              "h": 0.999,
+              "open": true
             },
             {
-              "x": 0,
-              "y": 0.00234375,
-              "w": 0.0828125,
-              "h": 0.996875
-            },
-            {
-              "x": 0.9567708333333333,
-              "y": 0.4671875,
-              "w": 0.042708333333333334,
-              "h": 0.53203125
+              "x": 0.937,
+              "y": 0.0,
+              "w": 0.0625,
+              "h": 0.999
             }
           ],
           "board": {
-            "x": 0.5223958333333333,
-            "y": 0.178125,
-            "w": 0.1234375,
-            "h": 0.19453125
+            "x": 0.7359375,
+            "y": 0.14375,
+            "w": 0.10052083333333334,
+            "h": 0.20703125
           },
           "papers": [
             {
-              "x": 0.25364583333333335,
-              "y": 0.65546875,
+              "x": 0.7442708333333333,
+              "y": 0.66484375,
               "w": 0.16979166666666667,
-              "h": 0.1078125
+              "h": 0.08515625
             },
             {
-              "x": 0.3546875,
-              "y": 0.63046875,
-              "w": 0.15729166666666666,
-              "h": 0.090625
+              "x": 0.11354166666666667,
+              "y": 0.4953125,
+              "w": 0.07395833333333333,
+              "h": 0.078125
             },
             {
-              "x": 0.4453125,
-              "y": 0.5953125,
-              "w": 0.146875,
-              "h": 0.09296875
+              "x": 0.8875,
+              "y": 0.61484375,
+              "w": 0.0703125,
+              "h": 0.053125
             }
           ],
           "notice": {
-            "x": 0.7583333333333333,
-            "y": 0.23046875,
-            "w": 0.10416666666666667,
-            "h": 0.14609375
+            "x": 0.6291666666666667,
+            "y": 0.16328125,
+            "w": 0.10208333333333333,
+            "h": 0.171875
           }
         }
       ],
       "flicker": {
         "scene": "corridor",
-        "photo": "photos/d78fbccb1163.webp"
+        "photo": "photos/673d5372f507.webp"
       },
       "scare": {
         "after": "door",
         "kind": "teacher",
-        "photo": "photos/6753d8b33bc1.webp"
+        "photo": "photos/f4ab31b8d6db.webp"
       }
     },
     {
@@ -275,129 +246,122 @@
       "scenes": [
         {
           "id": "corridor",
-          "photo": "photos/b01a99d29f41.webp",
-          "depth": "photos/ec1c9c91a389.webp",
+          "photo": "photos/6eb1030bb8e4.webp",
+          "depth": "photos/1480100f0275.webp",
           "doors": [
             {
-              "x": 0.8166666666666667,
-              "y": 0.06875,
-              "w": 0.0546875,
-              "h": 0.6171875,
-              "open": true
+              "x": 0.7958333333333333,
+              "y": 0.18828125,
+              "w": 0.0375,
+              "h": 0.5421875
             },
             {
-              "x": 0.7505208333333333,
-              "y": 0.14921875,
-              "w": 0.023958333333333335,
-              "h": 0.42890625,
-              "open": true
+              "x": 0.73125,
+              "y": 0.25078125,
+              "w": 0.0265625,
+              "h": 0.40703125
+            },
+            {
+              "x": 0.6604166666666667,
+              "y": 0.3046875,
+              "w": 0.022916666666666665,
+              "h": 0.27734375
             }
           ]
         },
         {
           "id": "door",
-          "photo": "photos/1098d63db63f.webp",
-          "depth": "photos/6325949f918c.webp",
+          "photo": "photos/26709a8cc788.webp",
+          "depth": "photos/88b3730f7d98.webp",
           "doors": [
             {
-              "x": 0.203125,
-              "y": 0.16796875,
-              "w": 0.16041666666666668,
-              "h": 0.5671875,
-              "open": true
+              "x": 0.63125,
+              "y": 0.16875,
+              "w": 0.14375,
+              "h": 0.46328125
             },
             {
-              "x": 0.5192708333333333,
-              "y": 0.16328125,
-              "w": 0.058854166666666666,
-              "h": 0.4375,
-              "open": true
-            },
-            {
-              "x": 0.7880208333333333,
-              "y": 0.27890625,
-              "w": 0.0359375,
-              "h": 0.29296875,
-              "open": true
-            },
-            {
-              "x": 0.8302083333333333,
-              "y": 0.31640625,
-              "w": 0.0296875,
-              "h": 0.2078125,
-              "open": true
-            },
-            {
-              "x": 0.8661458333333333,
-              "y": 0.33671875,
-              "w": 0.035416666666666666,
-              "h": 0.15625,
+              "x": 0.30625,
+              "y": 0.2546875,
+              "w": 0.11614583333333334,
+              "h": 0.48828125,
               "open": true
             }
           ],
-          "opened": "photos/ad7335b74cfd.webp"
+          "opened": "photos/deef44cf794b.webp"
         },
         {
           "id": "classroom",
-          "photo": "photos/211a55ff42aa.webp",
-          "depth": "photos/20e99d85d8e2.webp",
+          "photo": "photos/fb67bb32f19d.webp",
+          "depth": "photos/8e1e2bcdd642.webp",
           "doors": [
             {
-              "x": 0.8104166666666667,
-              "y": 0.35859375,
-              "w": 0.04895833333333333,
-              "h": 0.225
+              "x": 0.6380208333333334,
+              "y": 0.159375,
+              "w": 0.059895833333333336,
+              "h": 0.25546875
             },
             {
-              "x": 0.9484375,
-              "y": 0.3953125,
-              "w": 0.0359375,
-              "h": 0.275
-            },
-            {
-              "x": 0.9729166666666667,
-              "y": 0.39453125,
-              "w": 0.0265625,
-              "h": 0.3
+              "x": 0.9114583333333334,
+              "y": 0.25078125,
+              "w": 0.04583333333333333,
+              "h": 0.31171875
             }
           ],
           "board": {
-            "x": 0.2677083333333333,
-            "y": 0.134375,
-            "w": 0.4375,
-            "h": 0.22578125
+            "x": 0,
+            "y": 0.1125,
+            "w": 0.4203125,
+            "h": 0.21953125
           },
           "tv": {
-            "x": 0.75625,
-            "y": 0.025,
-            "w": 0.10677083333333333,
-            "h": 0.1453125
+            "x": 0.7223958333333333,
+            "y": 0.00625,
+            "w": 0.09427083333333333,
+            "h": 0.1171875
+          },
+          "screen": {
+            "x": 0.7307291666666667,
+            "y": 0.01640625,
+            "w": 0.0546875,
+            "h": 0.0875
           },
           "papers": [
             {
-              "x": 0.31302083333333336,
-              "y": 0.6890625,
-              "w": 0.3453125,
-              "h": 0.228125
+              "x": 0.159375,
+              "y": 0.775,
+              "w": 0.6265625,
+              "h": 0.22421875
+            },
+            {
+              "x": 0.628125,
+              "y": 0.67734375,
+              "w": 0.15208333333333332,
+              "h": 0.0859375
+            },
+            {
+              "x": 0.5479166666666667,
+              "y": 0.4828125,
+              "w": 0.1234375,
+              "h": 0.03828125
             }
           ],
-          "after": "photos/f41eeea3d2bc.webp",
-          "screen": {
-            "x": 0.763,
-            "y": 0.042,
-            "w": 0.077,
-            "h": 0.099
-          }
+          "after": "photos/87272cc3e9a2.webp"
         }
       ],
       "flicker": {
         "scene": "corridor",
-        "photo": "photos/f512b5fae273.webp"
+        "photo": "photos/9a9c6765fe37.webp",
+        "rush": [
+          "photos/c31f9b6fe4cd.webp",
+          "photos/9a9c6765fe37.webp",
+          "photos/1d3f36684cdd.webp"
+        ]
       },
       "scare": {
         "after": "classroom",
         "kind": "turn",
-        "photo": "photos/498741237392.webp"
+        "photo": "photos/5c0adbb2aa81.webp"
       }
     }
   ],
@@ -405,38 +369,38 @@
     {
       "cards": [
         {
-          "title": "大榕樹長進走廊",
-          "whisper": "葉子一直掉進來，還濕濕的。",
-          "title_en": "the banyan has grown into the hallway",
-          "whisper_en": "Leaves keep falling in, still damp.",
+          "title": "榕樹的根堵住走廊盡頭",
+          "whisper": "根比昨天垂得更低了。",
+          "title_en": "banyan tree roots block corridor end",
+          "whisper_en": "the roots hang lower than yesterday",
           "edits": {
-            "corridor": "Make the nearest ceiling tube light dark and stretch the corridor beyond the long stone wash trough far too long; move the red bucket with the mop from the floor to stand on top of the wash trough, run the wet mop trail from the floor up the left wall and over the barred windows, scatter large damp banyan leaves large in the foreground across the floor, and hang one long thin aerial root large in the foreground down in front of the far banyan-tree opening.",
-            "door": "Stretch the right-side hallway so the same brown wooden doors repeat into the far distance with every wooden door standing ajar; scatter large damp banyan leaves large in the foreground across the wet floor in front of the wooden shoe cabinet with white sneakers, and hang one long thin aerial root large in the foreground down beside the cork bulletin board with white slips.",
-            "office": "For its first photo: add large damp banyan leaves spread large across the foreground desks and floor and one long thin aerial root hanging large in the foreground from the ceiling, with all office doors left ajar in the background."
+            "corridor": "Make the middle ceiling fluorescent tube dark, make the far corridor beyond it far too long with the brown doors on the right all standing ajar repeating into the distance, move the red bucket with mop to stand alone in the middle of the floor by the green railing with a wet mop trail running up the right wall, and hang a few thin banyan aerial roots a little lower over the far end plus one large thin root hanging in the foreground by the sinks and taps.",
+            "door": "Make the top ceiling fluorescent tube dark, leave the large wooden sliding door and the farther wooden doors all standing ajar repeating into the distance, place the small red bucket on top of the wooden shoe cabinet with white sneakers where it could not be, and hang large thin banyan aerial roots down in the foreground from the ceiling draped over the shoe cabinet and over the bulletin board with blank papers.",
+            "office": "Add large thin banyan aerial roots hanging down in the foreground from the ceiling of the teachers' office, with one long white fluorescent tube dark above them."
           },
           "sound": "water"
         },
         {
-          "title": "導師寫滿整面牆",
-          "whisper": "牆上的名字全是錯的，卻越寫越多。",
-          "title_en": "the teacher has written across the whole wall",
-          "whisper_en": "The names on the wall are all wrong, and keep growing.",
+          "title": "導師的門貼滿空白卡片",
+          "whisper": "他從沒叫過你的名字，卻留給你這麼多張。",
+          "title_en": "teacher's door covered in blank cards",
+          "whisper_en": "he never said your name, but he left you many.",
           "edits": {
-            "corridor": "Make the nearest ceiling tube light dark and dead while the far corridor beyond the end banyan trees stretches impossibly long, leave all the right-side wooden doors ajar with black gaps, place a second identical red bucket with mop alone in the middle of the wet floor in the distance, drag a dark wet mop trail from the floor up the left wall above the long stone wash trough with metal taps, and cover the whole left wall above the trough floor-to-ceiling with huge dense illegible red-pen scribbl",
-            "door": "Leave the wooden sliding classroom door and the brown side door and the far hallway doors all ajar with dark gaps repeating into the distance, cover the entire white wall around the doors floor-to-ceiling with the same huge dense illegible red-pen scribble handwriting with no readable characters looming in the foreground, keep the low wooden shoe cabinet with white sneakers and the cork bulletin board with white ranking slips, and add a small red bucket standing alone far down the wet corridor o",
-            "office": "On the first photo of the teachers' office, cover the main wall behind the desks floor-to-ceiling wall-to-wall with the same huge dense illegible red-pen scribble handwriting with no readable characters filling the room, and on the nearest desk leave the beige attendance folder lying open with a second identical pen beside it as if the name was taken twice."
+            "corridor": "Make the nearest long white fluorescent tube dark, stretch the corridor beyond it far too long toward the green railing and banyan tree at the end, leave every brown wooden door on the right standing ajar, move the red bucket with the mop from beside the stone sinks and taps to standing alone in the middle of the distant wet floor, run a dark wet mop trail from the floor up the right wall, and plaster the nearest brown wooden doors in the right foreground with many large blank white name cards o",
+            "door": "Keep the large wooden sliding door with its small window half-open with bright white light inside, stretch the left corridor with its wet floor and fluorescent tubes far too long with the same wooden doors repeating into the distance, and cover the whole wooden sliding door in the foreground with many large overlapping blank white name cards, one slipped half out, clearly visible above the wooden shoe cabinet full of white sneakers and beside the cork board with blank slips.",
+            "office": "Add in the first photo a foreground office wooden door completely covered edge to edge with many large overlapping blank white name cards, one blank card slipped half out of its holder beside the door, lit by cold white fluorescent tubes."
           },
-          "sound": "chalk"
+          "sound": "papers"
         },
         {
-          "title": "月考排名貼滿牆",
-          "whisper": "牆上全是你的名次，無處可躲。",
-          "title_en": "the exam rankings cover the wall",
-          "whisper_en": "The walls are covered in your rank, nowhere to hide.",
+          "title": "排名條貼滿教室的牆",
+          "whisper": "你的名次還釘在這裡。",
+          "title_en": "ranking slips cover classroom wall",
+          "whisper_en": "your rank is still pinned here.",
           "edits": {
-            "corridor": "Stretch the corridor beyond the sinks into a far too long dark distance under a dead ceiling tube light with the banyan tree tiny at the end, leave every brown wooden door on the right standing ajar, move the red mop bucket with the mop to stand alone in the middle of the distant wet floor, run the wet mop trail up the left wall above the long stone sinks, and paste large blank white ranking slips with no text wall-to-wall over the left wall above the sinks and over the green lockers and railing",
-            "door": "Keep the wooden sliding classroom doors and the low wooden shoe rack with white sneakers and canvas shoes in the left foreground, leave the brown frosted-glass door and all distant brown doors on the right standing ajar and repeating into the distance, and spread large blank white ranking slips with no text wall-to-wall from the cork bulletin board to cover the whole white wall above and around the doors, with one slip on the board hanging crooked in the foreground and one loose pin lying on the",
-            "office": "First photo of the teachers' office: rows of wooden-veneer desks with steel legs under cool fluorescent tubes, and cover the entire wall above the desks wall-to-wall with large overlapping blank white ranking slips with no text filling the room, one slip hanging crooked large in the foreground."
+            "corridor": "Make the farthest white tube light dark, stretch the corridor beyond the green railing far too long, leave every wooden door on the right standing ajar, move the red bucket with the mop from beside the sinks to stand alone in the middle of the wet floor far down the corridor, run a dark mop trail from the floor up the left wall beside the concrete sinks, and plaster many large blank white ranking slips with no text all across the sink backsplash and the barred windows in the foreground, one hang",
+            "door": "Dim one overhead tube light, repeat the same wooden sliding door with small window receding into the distance down the wet corridor on the left with every door left ajar, and cover the cork bulletin board beside the sliding door edge-to-edge with many large overlapping blank white ranking slips with no text filling the frame, one blank slip hanging crooked with its pin lying on the wet floor below, keep the wooden shoe rack with white sneakers prominent in the foreground.",
+            "office": "For the first teachers' office photo, cover an entire wall and desk surfaces with many large blank white ranking slips with no text, layered and overlapping and filling the room, one blank slip hanging crooked with its pin lying on the floor below."
           },
           "sound": "papers"
         }
@@ -446,70 +410,70 @@
     {
       "cards": [
         {
-          "title": "榕樹根貼滿走廊窗",
-          "whisper": "窗戶不見了，根全部爬進來了。",
-          "title_en": "roots cover the corridor windows",
-          "whisper_en": "The windows are gone, the roots have all crawled inside.",
+          "title": "樹根封住了走廊盡頭",
+          "whisper": "根長回來了，把出口堵住。",
+          "title_en": "tree roots close the corridor end",
+          "whisper_en": "the roots grew back to shut the way out",
           "edits": {
-            "corridor": "Hang many thick dark brown aerial roots down from the ceiling to completely cover the large left black barred windows in the foreground, with more thick roots pressing in from the dark open end around the banyan trunk, and scatter damp fallen banyan leaves thickly across the wet terrazzo floor from the end up to the red bucket and stone wash trough.",
-            "door": "Drape many thick dark aerial roots down in the large foreground over the wooden sliding door and the open brown doorway and in front of the cork bulletin board with white slips, hanging down to the shoe cubbies with white sneakers, and scatter damp fallen banyan leaves thickly across the foreground floor around the pair of white sneakers.",
-            "classroom": "Cover the tall dark side windows on the left wall with dense thick aerial roots pushing inside and hanging down to the wooden-veneer desks with steel legs in the foreground, drape more roots down in front of the green sliding chalkboard, and scatter damp fallen banyan leaves across the desktops and floor around the wooden chairs."
+            "corridor": "Cover the far open end above the green metal railing with a dense curtain of thick tangled brown aerial roots hanging down to almost close the corridor, and drape several more very large thick aerial roots down in the extreme foreground from the ceiling and fluorescent tubes over the long stone sinks and the barred windows so they dominate the left side of the photo.",
+            "door": "Hang a dense mass of thick tangled aerial roots down large in the foreground from the ceiling over the brown sliding door with blank papers and over the wooden shoe rack full of white sneakers, with more thick roots pushing in through the bright open doorway to almost block it.",
+            "classroom": "Turn every small wooden chair around to face the camera around the wooden desks, and hang large thick tangled aerial roots down from the ceiling into the foreground over the nearest desks plus a dense curtain of thick roots hanging across the open rear doorway under the TV and across the open side window by the rice cooker, filling the room."
           },
-          "sound": "water"
+          "sound": "silence"
         },
         {
-          "title": "點名簿鋪滿了課桌",
-          "whisper": "每張桌上都在點你的名。",
-          "title_en": "attendance sheets cover every desk",
-          "whisper_en": "Every desk is calling your name.",
+          "title": "導師的空白卡片鋪滿地板",
+          "whisper": "名字都不見了，只剩空白。",
+          "title_en": "teacher's blank cards cover the floor",
+          "whisper_en": "every name is gone, only blank stays",
           "edits": {
-            "corridor": "Cover the wet terrazzo floor from the immediate foreground to the distant banyan trees with fallen damp banyan leaves, lay a row of large open blank beige attendance folders along the rim of the long stone wash-sink with faucets, and place one huge open blank folder on the floor in the immediate foreground beside the red bucket with the mop, no readable text, no people.",
-            "door": "Lay three huge open blank beige attendance folders across the wet terrazzo floor in the immediate foreground in front of the wooden shoe cabinet with white sneakers, lean one large open blank folder against the pair of white sneakers by the open brown door, and bunch all the blank white slips on the cork bulletin board together low on the board leaving empty pin holes with one curled blank slip on the floor below, no readable text, no people.",
-            "classroom": "Cover the top of every wooden student desk with a large open blank beige attendance folder with the nearest desk's open folder huge and filling the foreground, push all desks back to leave one middle wooden desk alone, and turn every wooden chair to face the camera, no people, no readable text."
+            "corridor": "Cover every brown wooden door on the right wall with overlapping blank white cards to match the nearest door filling the right foreground, hang a plain white short-sleeved school shirt on each barred window grille on the left, and place a single curled blank card on the wet reflective floor below the nearest covered door.",
+            "door": "Cover the entire brown sliding wooden door from floor to its small window with overlapping blank white cards, leave the small wall holder beside the door empty, and place one curled blank card on the wet floor beside the pair of white sneakers in front of the wooden shoe rack.",
+            "classroom": "Push every wooden desk away to leave one wooden desk alone in the foreground with all wooden chairs turned to face the camera, lay one blank white card flat on top of every wooden desk, and drape a plain white short-sleeved school shirt over the back of every chair."
           },
           "sound": "papers"
         },
         {
-          "title": "排名紙全滑落一角",
-          "whisper": "名字都掉在地上，沒人敢撿。",
-          "title_en": "ranking slips slid to one corner",
-          "whisper_en": "All the names fell to the floor, and no one dares pick them up.",
+          "title": "排名牆一片空白，紙角捲起",
+          "whisper": "所有名字都消失了，只剩空白。",
+          "title_en": "ranking wall hangs blank and curling",
+          "whisper_en": "every name is gone, only blank stays.",
           "edits": {
-            "corridor": "Cover the green lockers and the wooden doors on the right with many small blank white slips that have all slid down and bunched together at the bottom, leaving bare boards with empty pin holes above; scatter several more curled blank white slips large in the foreground on the wet terrazzo floor beside the red bucket and stone wash trough, and add long dark shadows of seated classmates stretching across the wet floor with nobody casting them, plus a distant dark adult silhouette with its back tur",
-            "door": "Transform the cork bulletin board beside the open brown door so all 18 blank white slips have slid down and bunched thick in its bottom corner, leaving most of the bare board exposed with empty pin holes; place one large bare curled blank white slip in the extreme foreground on the wet floor, scatter a few more curled slips by the wooden shoe cabinet full of white sneakers and the pair of white sneakers before the door, all under the existing red scribbles on the wall.",
-            "classroom": "Push every wooden student desk away to leave one single wooden desk alone large in the foreground, turn every wooden chair to face the camera, drape a white short-sleeved Taiwanese school shirt with navy trim over every chair back, and pile many blank white ranking slips slid into thick bunched stacks on the teacher's wooden desk and sliding off onto the floor, with one large curled blank slip in the foreground and long shadows of a whole class across the floor beneath the green chalkboard and C"
+            "corridor": "Cover the right-side brown doors and pale wall in the near foreground with dozens of large blank white ranking slips, curling loose and overlapping to fill the frame, with more blank slips scattered across the wet terrazzo floor in the foreground.",
+            "door": "Make the many blank papers on the open wooden sliding door curl and hang loose with several missing, strip the cork notice board beside the double wooden doors so its blank sheets curl loose with pins missing, and scatter large blank ranking slips in the foreground around the white sneakers and wooden shoe rack.",
+            "classroom": "Stack tall piles of blank white exam papers from floor to ceiling on the wooden desks in the foreground and middle, turn every wooden chair to face the camera, leave many blank slips curling loose along the green blackboard tray and pigeonhole shelves, and cast long shadows of a whole class of desks and chairs across the wet floor with nobody casting them."
           },
           "sound": "papers"
         }
       ],
-      "picked": 1
+      "picked": 0
     }
   ],
   "ending": {
-    "daylight": "photos/34fd32f49485.webp",
-    "daylightEmpty": "photos/609ecf913a84.webp",
-    "first": "photos/d12e14d9469e.jpg",
-    "last": "photos/b01a99d29f41.webp",
+    "daylight": "photos/d2cd20ad74e5.webp",
+    "daylightEmpty": "photos/213e5e8f7778.webp",
+    "first": "photos/cd885284287b.jpg",
+    "last": "photos/6eb1030bb8e4.webp",
     "year": 2008,
     "memories": [
       "走廊盡頭的大榕樹",
-      "總是叫錯我名字的導師",
-      "貼在公布欄上的月考排名"
+      "從來不叫我名字的導師",
+      "貼在牆上的月考排名"
     ],
     "memories_en": [
-      "the big banyan tree at the end of the corridor",
-      "the homeroom teacher who always got my name wrong",
-      "the monthly exam rankings pinned on the bulletin board"
+      "the banyan tree at the end of the corridor",
+      "the teacher who never said my name",
+      "the exam ranking pinned on the wall"
     ],
     "changes": [
-      "導師寫滿整面牆",
-      "點名簿鋪滿了課桌"
+      "導師的門貼滿空白卡片",
+      "樹根封住了走廊盡頭"
     ],
     "changes_en": [
-      "the teacher has written across the whole wall",
-      "attendance sheets cover every desk"
+      "teacher's door covered in blank cards",
+      "tree roots close the corridor end"
     ],
-    "comment": "昨晚看到你了，榕樹還在。唸錯名字抱歉，榜單已撕去，你一直很好。",
-    "comment_en": "I saw you last night, the banyan is still there. Sorry for getting your name wrong, the rankings are gone. You've always been good."
+    "comment": "我終於知道你在榕樹下等得多安靜。牆上的榜單，原諒我。你從來不只是一個名次，我現在看見你了。",
+    "comment_en": "I finally learned how quietly you waited by the banyan. Forgive the list on the wall. You were always more than a rank — I see you now."
   }
 }

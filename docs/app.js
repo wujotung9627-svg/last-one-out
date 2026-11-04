@@ -62,6 +62,8 @@ const LINES = {
     dutyToday: 'ON DUTY TODAY  ',
     onDuty: 'On duty',
     otherPhoto: '(click it for the other one)',
+    wayBack: 'Back to the corridor',
+    wayOn: 'Walk on',
     rollCall: 'Answer when your name is called.',
     here: 'Here',
     wrongAnswer: 'That is not how you answer.',
@@ -123,6 +125,8 @@ const LINES = {
     dutyToday: '本日值日生　',
     onDuty: '值日生',
     otherPhoto: '（點照片看另一張）',
+    wayBack: '回到走廊',
+    wayOn: '往前走',
     rollCall: '點到名要答「有」。',
     here: '有',
     wrongAnswer: '不是這樣答的。',
@@ -589,6 +593,12 @@ function placeHotspots(scene) {
       const button = el('button', null, 'hotspot');
       button.type = 'button';
       box(button, spot);
+      // No door found here (only cupboards, say): the way on is written where you can see
+      // it, so nobody has to guess what to click.
+      if (!doors.length) {
+        button.classList.add('way');
+        button.append(el('span', exit ? t('wayBack') : t('wayOn'), 'way-hint'));
+      }
       if (exit || leadsOn(scene, spot, i)) {
         button.classList.add('forward');
         button.setAttribute('aria-label', exit ? t('throughDoor') : t('forward'));
@@ -1604,17 +1614,53 @@ async function ballThenFigure() {
       flash.dataset.src = figure.photo;
       await flash.decode().catch(() => {});
     }
+    // Frames of the same corridor with the figure further and nearer, decoded now so the
+    // cuts between them are instant.
+    const rush = await Promise.all((figure?.rush ?? []).map(async (url) => {
+      const img = new Image();
+      img.src = url;
+      await img.decode().catch(() => {});
+      return url;
+    }));
     // The ball takes your eyes all the way down to your feet. Then, without warning,
     // someone comes out of the far end of the corridor straight at you, and it is dark.
     await rollBall({ toFeet: true });
     await pause(700);
     if (!sameScene(currentScene(), scene) || !figure?.photo) return;
     for (const id of ['#ball', '#ball-shadow', '#ball-reflection']) $(id).hidden = true;
-    state.audio?.stinger();
+    if (!(rush.length >= 3) || REDUCED_MOTION) state.audio?.stinger();
     flash.getAnimations().forEach((a) => a.cancel());
+    const stage = $('#stage');
     if (REDUCED_MOTION) {
       flash.style.opacity = '1';
       await pause(600);
+    } else if (rush.length >= 3) {
+      // The lights stutter, and between each stutter it is nearer: at the far end, halfway,
+      // then lunging at you.
+      const beats = [
+        [rush[0], 220, 120],
+        [rush[1], 200, 90],
+        [rush[2], 520, 0],
+      ];
+      for (const [i, [url, show, gap]] of beats.entries()) {
+        flash.src = url;
+        flash.style.opacity = '1';
+        if (i === beats.length - 1) {
+          state.audio?.stinger();
+          stage.animate(
+            [0, 1, 2, 3, 4, 5, 6, 7].map((k) => ({ transform: `translate(${(Math.random() - 0.5) * 18 * (1 - k / 8)}px, ${(Math.random() - 0.5) * 12 * (1 - k / 8)}px)` })),
+            { duration: 500 },
+          );
+          flash.animate([{ transform: 'scale(1)', filter: 'brightness(1.6)' }, { transform: 'scale(1.06)', filter: 'brightness(1)' }], { duration: show, easing: 'ease-out', fill: 'forwards' });
+        } else state.audio?.flicker();
+        await pause(show);
+        if (gap) {
+          flash.style.opacity = '';
+          stage.classList.add('blackout');
+          await pause(gap);
+          stage.classList.remove('blackout');
+        }
+      }
     } else {
       const { vx, vy } = await floorPath(scene); // it comes from where the corridor ends
       flash.style.transformOrigin = `${vx * 100}% ${vy * 100}%`;
