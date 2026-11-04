@@ -1,6 +1,6 @@
-// Plays one live game of Last One Out (English) in a Chromium window and records the
-// tab (picture + game sound) with the page's own tab capture. Every picture in the
-// recording is made by Meta's models during this run (the game server is live).
+// Plays the judges' version of Last One Out (English) in a Chromium window and records the
+// tab (picture + game sound) with the page's own tab capture. Every photo in it was made
+// by Meta's models in the night that version plays back. GAME_URL can point elsewhere.
 // The roll call is answered with the game's own "Here" button. The microphone the page
 // sees is silence (no real microphone is ever opened).
 //
@@ -18,11 +18,14 @@ const { chromium } = (() => {
   }
 })();
 
-const GAME = process.env.GAME_URL || 'http://127.0.0.1:4310/';
+const GAME = process.env.GAME_URL || 'https://wujotung9627-svg.github.io/last-one-out/'; // the judges' version
 const NAME = process.env.DEMO_NAME || 'unknown';
 const YEAR = '2008';
 const MEMORIES = ['the banyan tree at the end of the corridor', 'the teacher who never said my name', 'the exam ranking pinned on the wall'];
-const KEEP = [1, 0, 2]; // which chalk line stays on each walk's board
+let KEEP = [1, 0, 2]; // which chalk line stays on each walk's board
+// The judges' replay keeps the lines that were kept when it was recorded.
+const replayRun = await fetch(new URL('run.json', GAME)).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+if (replayRun?.draws) KEEP = replayRun.draws.map((d) => d.picked);
 const DIR = join(import.meta.dirname, 'out', `run-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}`);
 mkdirSync(DIR, { recursive: true });
 
@@ -47,6 +50,10 @@ page.on('response', async (res) => {
 });
 page.on('console', (m) => { if (m.type() === 'error') log('console error:', m.text().slice(0, 200)); });
 await page.exposeFunction('__chunk', (b64) => new Promise((r) => video.write(Buffer.from(b64, 'base64'), r)));
+// events are sent out every second, so a page that resets cannot lose them
+const events = [];
+await page.exposeFunction('__evlog', (batch) => void events.push(...batch));
+page.on('framenavigated', (f) => f === page.mainFrame() && log('navigated:', f.url()));
 
 await page.addInitScript(() => {
   // ---- event log (relative to the recording start) ----
@@ -101,6 +108,10 @@ await page.addInitScript(() => {
     window.__lineDone = lineDone;
     last = s;
   }, 200);
+  let sent = 0;
+  setInterval(() => {
+    if (sent < window.__events.length && window.__evlog) window.__evlog(window.__events.slice(sent, (sent = window.__events.length)));
+  }, 1000);
   document.addEventListener('click', (e) => {
     const t = e.target.closest('button');
     if (t) window.__ev('click', { id: t.id, cls: t.className, text: (t.textContent || '').slice(0, 80) });
@@ -150,12 +161,19 @@ await page.waitForTimeout(2500);
 await page.click('#name');
 await page.keyboard.type(NAME, { delay: 140 });
 await page.waitForTimeout(500);
-await page.click('#year');
-await page.keyboard.type(YEAR, { delay: 160 });
-for (const [i, m] of MEMORIES.entries()) {
-  await page.waitForTimeout(500);
-  await page.click(`#m${i + 1}`);
-  await page.keyboard.type(m, { delay: 45 });
+const locked = await page.evaluate(() => document.querySelector('#m1')?.readOnly);
+if (locked) {
+  // the replay: the year and the memories are the recorded night's, and cannot be changed
+  meta.replay = true;
+  await page.waitForTimeout(2500);
+} else {
+  await page.click('#year');
+  await page.keyboard.type(YEAR, { delay: 160 });
+  for (const [i, m] of MEMORIES.entries()) {
+    await page.waitForTimeout(500);
+    await page.click(`#m${i + 1}`);
+    await page.keyboard.type(m, { delay: 45 });
+  }
 }
 await page.waitForTimeout(1200);
 await page.click('#start-form button[type="submit"]');
@@ -266,13 +284,15 @@ while (Date.now() < deadline) {
   }
 }
 
-// The contact book: let it settle, then scroll down to it.
-await page.waitForTimeout(3500);
-await page.evaluate(() => document.querySelector('#report')?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+// The contact book: a clean picture of the page itself, then scroll down to it.
+await page.waitForTimeout(2500);
+await page.locator('#book').screenshot({ path: join(DIR, 'book.png') }).catch((e) => log('no book picture:', e.message));
+await page.evaluate(() => document.querySelector('#report')?.scrollIntoView({ behavior: 'smooth', block: 'center' })).catch(() => {});
 await page.waitForTimeout(9000);
-await page.evaluate(() => window.__stopRec());
+await page.waitForTimeout(1200); // the last events and chunks
+const stopped = await page.evaluate(() => (typeof window.__stopRec === 'function' ? window.__stopRec().then(() => true) : false)).catch(() => false);
+if (!stopped) log('the recorder had already stopped; keeping what was written');
 await new Promise((r) => video.end(r));
-const events = await page.evaluate(() => window.__events);
 writeFileSync(join(DIR, 'events.json'), JSON.stringify(events, null, 1));
 meta.finished = new Date().toISOString();
 writeFileSync(join(DIR, 'meta.json'), JSON.stringify(meta, null, 2));

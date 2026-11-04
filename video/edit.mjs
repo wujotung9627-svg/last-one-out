@@ -6,7 +6,7 @@
 // A beat runs from one step forward to just after the next, so every shot starts and ends on
 // a movement; cut points never fall inside a line that is still being written or spoken.
 import { createRequire } from 'node:module';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
@@ -134,45 +134,78 @@ async function pick() {
   if (!key) throw new Error('no MODEL_API_KEY in .env');
   const prompt = `You are cutting the first minute of the demo video for "Last One Out", a quiet horror game.
 In Taiwan, the student on duty is the last one out. The player types three memories and a year; Meta's models photograph a night school from them; the player walks into the photos in 3D, three times; each time they erase two of three chalk lines and the school changes around the one they kept; a teacher in a cracked porcelain mask waits behind a door; on the last walk a basketball rolls to their feet; the classroom is full of figures with their backs turned; the speaker calls their name, they answer, every head turns; then the afternoon after, the credits and a page of a Taiwanese contact book.
-This is one real playthrough, ${LENGTH.toFixed(0)} seconds; every photo was made live by Meta's models.
+This is one playthrough of the judges' replay, ${LENGTH.toFixed(0)} seconds: a night that was played live, with every photo made by Meta's models during that game. In the replay the memories and the year are fixed; the player only types a name ("unknown").
 
 The recording is split into beats. Each beat starts when the player steps forward and ends just after the next step, so every beat starts and ends on a movement:
 ${list.map((b) => `${b.id}: ${b.start}-${b.end}s (${b.seconds}s) — ${b.about}`).join('\n')}
 
 The contact sheets show frames of each beat, labelled with the beat id and time.
 
-Make a trailer of 50 to 60 seconds of footage that makes a viewer want to play, in story order:
-- Choose 8 to 11 beats. You may trim a beat to a sub-range with "from" and "to" (seconds), but keep at least 3 seconds, and keep these whole: the teacher scare, and the roll call through every head turning. Prefer letting a beat breathe over many short cuts; a shot should end after its line has been read.
-- Write 4 title cards. Each is shown full screen for about 3 seconds BEFORE a beat ("before": beat id), white words on black with an animated effect: "seep" (dark liquid runs down from the top, the words run), "crack" (the screen cracks through the words), "smear" (the words are wiped like chalk), "stain" (a damp stain spreads behind them). Plain English, at most 6 words, no exclamation marks, never repeating a line the game shows, never giving a scare away. Read in order, the four cards should tell a stranger what this game is. Match each effect to its words.
-Answer with JSON only: {"shots":[{"beat":"b3","from":12.0,"to":19.5}],"titles":[{"before":"b3","text":"...","effect":"crack"}]}`;
+Make a trailer of 70 to 85 seconds of footage, in story order, that a stranger can follow: they should understand what the player does and what happens.
+- Choose 6 to 8 beats and let each one play long enough to see what happens and to read the line under the photo, at least 7 seconds each. You may trim a beat to a sub-range with "from" and "to" (seconds). Cut points that fall inside a line under the photo, a speaker announcement or a scare are moved to its edge afterwards. Keep these whole: the chalkboard choice (both erasures and the kept line being rewritten), the teacher scare, the basketball rolling to the player's feet, and the roll call through every head turning.
+- Write 4 title cards. Each is shown full screen for about 4 seconds BEFORE a beat ("before": beat id), words in dripping dark-red paint on black that flicker like a failing fluorescent light. Each card plainly tells the viewer what they are about to see the player do or face (for example what the chalkboard choice is), so the trailer can be understood without playing. Grammatical, natural English a native speaker would write for a film trailer (with articles and apostrophes, e.g. "the teachers' office"), at most 8 words, no exclamation marks, never repeating a line the game shows, never giving a scare away. Do not mention typing memories: in this replay they are fixed.
+Answer with JSON only: {"shots":[{"beat":"b3","from":12.0,"to":19.5}],"titles":[{"before":"b3","text":"..."}]}`;
   const content = [{ type: 'text', text: prompt }, ...sheets.map((f) => ({ type: 'image_url', image_url: { url: `data:image/jpeg;base64,${readFileSync(f).toString('base64')}` } }))];
-  const res = await fetch('https://api.meta.ai/v1/chat/completions', {
-    method: 'POST',
-    redirect: 'error',
-    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: 'muse-spark-1.3', messages: [{ role: 'user', content }], reasoning_effort: 'medium', max_completion_tokens: 8000 }),
-  });
-  if (!res.ok) throw new Error(`Muse Spark answered HTTP ${res.status}`);
-  const data = await res.json();
-  const text = data.choices?.[0]?.message?.content ?? '';
+  // Muse Spark reasons first and the reasoning counts towards the limit: allow plenty, and
+  // ask once more if it still ran out before answering.
+  let data = null, text = '';
+  for (let attempt = 0; attempt < 2 && !text.includes('{'); attempt++) {
+    const res = await fetch('https://api.meta.ai/v1/chat/completions', {
+      method: 'POST',
+      redirect: 'error',
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'muse-spark-1.3', messages: [{ role: 'user', content }], reasoning_effort: 'medium', max_completion_tokens: 16000 }),
+    });
+    if (!res.ok) throw new Error(`Muse Spark answered HTTP ${res.status}`);
+    data = await res.json();
+    text = data.choices?.[0]?.message?.content ?? '';
+  }
   writeFileSync(join(WORK, 'spark-answer.txt'), text);
   writeFileSync(join(WORK, 'spark-usage.json'), JSON.stringify({ model: 'muse-spark-1.3', usage: data.usage, at: new Date().toISOString() }, null, 2));
-  const plan = JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1));
-  // Snap Muse Spark's cut points so none falls inside a line or a scare.
+  finalize(JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1)), list);
+}
+
+// The moments that must stay whole whatever was picked: the roll call through every head
+// turning, the teacher behind the door, the basketball rolling to your feet, and each
+// chalkboard choice.
+function mustKeep() {
+  const keep = [];
+  const roll = rolls[0];
+  const turn = roll ? scares.find(([s]) => s > roll[0]) : null;
+  if (roll) keep.push([roll[0] - 3.5, (turn ?? roll)[1] + 1.0]);
+  for (const sc of scares) if (!roll || sc[0] < roll[0]) keep.push([sc[0] - 2.5, sc[1] + 0.6]);
+  for (const [b0, b1] of balls) keep.push([b0 - 1.0, Math.min(b1, b0 + 7)]); // the ball rolling to your feet
+  // each chalkboard choice: both erasures and the kept line being rewritten
+  for (let i = 0; i + 1 < erases.length; i++) if (erases[i + 1] - erases[i] < 8) keep.push([erases[i] - 2.5, erases[i + 1] + 4.5]), i++;
+  return keep;
+}
+
+function finalize(plan, list) {
   const byId = Object.fromEntries(list.map((b) => [b.id, b]));
   plan.shots = plan.shots.filter((s) => byId[s.beat]).map((s) => {
     const b = byId[s.beat];
     const from = Math.max(b.start, Math.min(b.end - 3, s.from ?? b.start));
     const to = Math.min(b.end, Math.max(from + 3, s.to ?? b.end));
-    const start = +snapIn(from).toFixed(2), end = +snapOut(to).toFixed(2);
+    let start = snapIn(from), end = snapOut(to);
+    for (const [k0, k1] of mustKeep()) if (k0 < b.end && k1 > b.start) (start = Math.min(start, Math.max(b.start, k0))), (end = Math.max(end, Math.min(LENGTH, k1)));
+    start = +start.toFixed(2);
+    end = +end.toFixed(2);
     return { ...s, start, end, snapped: start !== +from.toFixed(2) || end !== +to.toFixed(2) };
   });
+  // No footage twice: a shot starts where the one before it ended.
+  plan.shots.sort((a, b) => a.start - b.start);
+  for (let i = 1; i < plan.shots.length; i++) if (plan.shots[i].start < plan.shots[i - 1].end) plan.shots[i].start = plan.shots[i - 1].end;
+  plan.shots = plan.shots.filter((x) => x.end - x.start >= 3);
+  // The whole video must stay under three minutes: the afternoon after goes first (the
+  // contact book card shows it).
+  const footage = () => plan.shots.reduce((n, x) => n + x.end - x.start, 0);
+  if (footage() > 90) plan.shots = plan.shots.filter((x) => x.beat !== 'ending');
   writeFileSync(join(WORK, 'plan.json'), JSON.stringify(plan, null, 2));
   const total = plan.shots.reduce((n, s) => n + s.end - s.start, 0);
   console.log(`Muse Spark: ${plan.shots.length} shots, ${total.toFixed(1)} s of footage, ${plan.titles.length} title cards`);
   for (const s of plan.shots) {
     const title = plan.titles.find((x) => x.before === s.beat);
-    if (title) console.log(`   [${title.effect}] ${title.text}`);
+    if (title) console.log(`   [card] ${title.text}`);
     console.log(`${s.beat.padEnd(7)} ${s.start.toFixed(1)}-${s.end.toFixed(1)}${s.snapped ? ' (snapped)' : ''}  ${byId[s.beat].about.slice(0, 110)}`);
   }
 }
@@ -210,7 +243,7 @@ async function build() {
 
   // 1. the title cards (animated, with their own sound)
   const titlesJson = join(WORK, 'titles.json');
-  writeFileSync(titlesJson, JSON.stringify(plan.titles.map((x) => ({ text: x.text, effect: x.effect }))));
+  writeFileSync(titlesJson, JSON.stringify(plan.titles.map((x) => ({ text: x.text, effect: 'drip' }))));
   execFileSync('node', [join(HERE, 'titles.mjs'), join(WORK, 'titles'), titlesJson], { stdio: 'inherit' });
 
   // 2. the trailer: Muse Spark's shots, each preceded by its title card
@@ -226,24 +259,25 @@ async function build() {
 
   // 3. how it is made: cards from this run's own photos, depth maps and SAM boxes
   const book = join(WORK, 'book.png');
-  ff('-ss', String(Math.min(LENGTH - 0.5, reportAt + 4.5)), '-i', VIDEO, '-frames:v', '1', book);
+  if (existsSync(join(REC, 'book.png'))) execFileSync('cp', [join(REC, 'book.png'), book]); // a picture of the page itself
+  else {
+  // The contact book once the page has scrolled to it, cropped to the page itself.
+  const bookAt = String(Math.min(LENGTH - 0.6, reportAt + 11));
+  const found = spawnSync('ffmpeg', ['-hide_banner', '-ss', bookAt, '-i', VIDEO, '-frames:v', '3', '-vf', 'cropdetect=limit=0.22:round=2:reset=0', '-f', 'null', '-']).stderr.toString();
+  const crop = found.match(/crop=(\d+:\d+:\d+:\d+)/g)?.pop()?.slice(5);
+  ff('-ss', bookAt, '-i', VIDEO, '-frames:v', '1', ...(crop ? ['-vf', `crop=${crop}`] : []), book);
+  }
   execFileSync('node', [join(HERE, 'cards.mjs'), RUN, join(WORK, 'cards'), book], { stdio: 'inherit' });
   const C = join(WORK, 'cards');
   const how = join(WORK, 'how.png');
-  await png(`<div style="height:1080px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;color:#f1ece0"><div style="font:400 120px 'Bebas Neue';letter-spacing:.03em">How it is made</div><div style="font:400 36px 'Courier Prime';color:#b9b3a6">Every photo you just saw was made by Meta's models during this one game.</div></div>`, how);
-  parts.push(card(how, 3.5, 'how', 0.02));
-  parts.push(card(join(C, '1-bible.png'), 8, 'c1'));
-  parts.push(card(join(C, '2-depth.png'), 7, 'c2'));
-  const walkAt = changes('gl')[1];
-  if (walkAt) {
-    const out = join(WORK, 'walkclip.mp4');
-    ff('-ss', String(walkAt - 0.3), '-t', '4', '-i', VIDEO, '-vf', 'fade=t=in:st=0:d=0.3,fade=t=out:st=3.6:d=0.4', '-af', 'afade=t=in:d=0.25,afade=t=out:st=3.5:d=0.5', ...ENC, out);
-    parts.push(out);
-  }
-  parts.push(card(join(C, '3-sam.png'), 8, 'c3'));
-  parts.push(card(join(C, '4-edit.png'), 9, 'c4'));
+  await png(`<div style="height:1080px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;color:#f1ece0"><div style="font:400 120px 'Bebas Neue';letter-spacing:.03em">How it is made</div><div style="font:400 36px 'Courier Prime';color:#b9b3a6">Every photo you just saw was made by Meta's models in one live game, recorded for the replay.</div></div>`, how);
+  parts.push(card(how, 3, 'how', 0.02));
+  parts.push(card(join(C, '1-bible.png'), 9, 'c1'));
+  parts.push(card(join(C, '2-depth.png'), 8, 'c2'));
+  parts.push(card(join(C, '3-sam.png'), 9, 'c3'));
+  parts.push(card(join(C, '4-edit.png'), 10, 'c4'));
   parts.push(card(join(C, '5-voice.png'), 7, 'c5'));
-  parts.push(card(join(C, '6-book.png'), 8, 'c6'));
+  parts.push(card(join(C, '6-book.png'), 9, 'c6'));
 
   // 4. the end card
   const end = join(WORK, 'end.png');
@@ -252,22 +286,28 @@ async function build() {
     <div style="font:italic 400 44px 'IM Fell English';color:#e6dfcf">Play it: ${PLAY_URL.replace('https://', '')}</div>
     <div style="font:400 30px 'Courier Prime';color:#c9a227">${REPO_URL}</div>
     <div style="font:400 30px 'Courier Prime';color:#c9c3b5;margin-top:14px">Muse Spark · Muse Image · SAM 3.1 · Muse Voice Transcribe</div>
-    <div style="font:400 25px 'Courier Prime';color:#9d978a;max-width:1450px;line-height:1.5">Every photo in this video was made by Meta's models during one live game.<br>Muse Spark watched the recording and chose the trailer's shots and title cards.</div>
+    <div style="font:400 25px 'Courier Prime';color:#9d978a;max-width:1450px;line-height:1.5">Recorded from the replay at the link above: one night played live, every photo made by Meta's models.<br>Muse Spark watched the recording and chose the trailer's shots and title cards.</div>
     <div style="font:400 25px 'Courier Prime';color:#9d978a">Built during the Meta Global AI Developer Hackathon, Oct 27 – Nov 4, 2026 · JO TUNG WU</div></div>`, end);
-  parts.push(card(end, 9, 'end', 0.015));
+  parts.push(card(end, 8, 'end', 0.015));
   await browser.close();
 
   // Decode every part on its own and join with the concat filter (stream copy breaks on
   // parts whose encoder settings differ: stills vs. game footage).
+  const total = parts.reduce((n, p) => n + probe(p), 0);
+  console.log(`total ${total.toFixed(1)} s${total > 178 ? '  (OVER 3 MINUTES: trim)' : ''}`);
   const joined = join(WORK, 'joined.mp4');
   const graph = parts.map((_, i) => `[${i}:v][${i}:a]`).join('') + `concat=n=${parts.length}:v=1:a=1[v][a]`;
   ff(...parts.flatMap((p) => ['-i', p]), '-filter_complex', graph, '-map', '[v]', '-map', '[a]', ...ENC, joined);
   // Quiet horror sound with loud stings: lift it and let a limiter catch the stings.
   const final = join(REC, 'demo.mp4');
-  ff('-i', joined, '-c:v', 'copy', '-af', 'volume=4dB,alimiter=limit=0.84:attack=3:release=60:level=false', '-c:a', 'aac', '-b:a', '256k', '-ar', '48000', final);
+  ff('-i', joined, '-c:v', 'copy', '-af', 'volume=4dB,alimiter=limit=0.78:attack=2:release=60:level=false', '-c:a', 'aac', '-b:a', '256k', '-ar', '48000', final);
   console.log('demo', final, probe(final).toFixed(1), 's');
 }
 
-if (STAGE === 'beats') console.log(beats().map((b) => `${b.id.padEnd(7)} ${b.start}-${b.end} (${b.seconds}s) ${b.about.slice(0, 120)}`).join('\n'));
+if (STAGE === 'finalize') {
+  const list = beats();
+  const text = readFileSync(join(WORK, 'spark-answer.txt'), 'utf8');
+  finalize(JSON.parse(text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1)), list);
+} else if (STAGE === 'beats') console.log(beats().map((b) => `${b.id.padEnd(7)} ${b.start}-${b.end} (${b.seconds}s) ${b.about.slice(0, 120)}`).join('\n'));
 else if (STAGE === 'pick') await pick();
 else if (STAGE === 'build') await build();

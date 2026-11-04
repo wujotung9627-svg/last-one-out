@@ -1,7 +1,7 @@
 // Renders the trailer's title cards as short animated clips (1920x1080, 30 fps, with sound).
 // Each card is drawn frame by frame on a canvas (deterministic, no dropped frames), then
 // ffmpeg joins the frames with a synthesised sound for its effect.
-//   node titles.mjs <out dir> <cards.json>      cards.json: [{ "text": "...", "effect": "seep|crack|smear|stain" }]
+//   node titles.mjs <out dir> <cards.json>      cards.json: [{ "text": "...", "effect": "flicker" (default) | "seep|crack|smear|stain" }]
 // -> <out dir>/title-<i>.mp4
 import { createRequire } from 'node:module';
 import { execFileSync } from 'node:child_process';
@@ -21,11 +21,11 @@ const [outDir, listFile] = process.argv.slice(2).map((p) => resolve(p));
 const cards = JSON.parse(readFileSync(listFile, 'utf8'));
 mkdirSync(outDir, { recursive: true });
 const FPS = 30;
-const SECONDS = 2.8;
+const SECONDS = Number(process.env.TITLE_SECONDS || 4.4); // long enough to read
 const ff = (...args) => execFileSync('ffmpeg', ['-hide_banner', '-v', 'error', '-y', ...args], { stdio: ['ignore', 'inherit', 'inherit'] });
 
 const PAGE = `<!doctype html><html><head><meta charset="utf-8">
-<style>@import url('https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&family=Caveat:wght@500&display=swap');
+<style>@import url('https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&family=Caveat:wght@500&family=Permanent+Marker&family=Rubik+Wet+Paint&display=swap');
 html,body{margin:0;background:#000;overflow:hidden}canvas{display:block}</style></head>
 <body><canvas id="c" width="1920" height="1080"></canvas><script>
 const W = 1920, H = 1080, c = document.getElementById('c'), g = c.getContext('2d');
@@ -38,10 +38,58 @@ let card = null;
 
 window.setup = (text, effect, s) => {
   seed = s;
+  // flicker: on/off spans like a failing fluorescent tube, then a hold with one stutter, then off
+  const on = [];
+  let t = 0.15;
+  for (const [a, b] of [[0.05, 0.08], [0.06, 0.12], [0.04, 0.05], [0.1, 0.2], [0.05, 0.06]]) { const len = a + rnd() * (b - a); on.push([t, t + len]); t += len + 0.04 + rnd() * 0.09; }
+  const hold = t + 1.6 + rnd() * 0.3; // steady, then one stutter, then steady until it goes out
+  on.push([t, hold]);
+  on.push([hold + 0.07, hold + 0.15]);
+  on.push([hold + 0.21, ${SECONDS} - 0.35]);
+  window.__on = on;
   card = { text, effect, drips: [], runs: [], crack: null, stain: [] };
   const chalk = effect === 'smear';
   o.clearRect(0, 0, W, H);
-  o.font = chalk ? '500 124px Caveat' : 'italic 104px "IM Fell English"';
+  if (effect === 'drip') {
+    const face = window.__face || 'Rubik Wet Paint';
+    // one line, or two lines split at the space nearest the middle, as large as fits
+    const words = text.split(' ');
+    let rows = [text];
+    let size = 160;
+    o.font = size + 'px "' + face + '"';
+    if (o.measureText(text).width > W * 0.84 && words.length > 2) {
+      let best = 1, diff = Infinity;
+      for (let i = 1; i < words.length; i++) { const d = Math.abs(words.slice(0, i).join(' ').length - words.slice(i).join(' ').length); if (d < diff) (diff = d), (best = i); }
+      rows = [words.slice(0, best).join(' '), words.slice(best).join(' ')];
+    }
+    const widest = () => Math.max(...rows.map((r) => o.measureText(r).width));
+    while (widest() > W * 0.84 && size > 80) { size -= 6; o.font = size + 'px "' + face + '"'; }
+    o.textAlign = 'center'; o.textBaseline = 'middle';
+    o.fillStyle = '#a3171a';
+    const lh = size * 1.12, top = H / 2 - 50 - ((rows.length - 1) * lh) / 2;
+    rows.forEach((r, i) => o.fillText(r, W / 2, top + i * lh));
+    card.box = { x0: W / 2 - widest() / 2, x1: W / 2 + widest() / 2, y0: top - size * 0.5, y1: top + (rows.length - 1) * lh + size * 0.5 };
+    // the lowest painted pixel in each column: where paint can run from
+    const img = o.getImageData(0, 0, W, H).data;
+    const bottom = (x) => { for (let y = Math.min(H - 1, Math.round(card.box.y1 + size * 0.4)); y > card.box.y0; y--) if (img[(y * W + x) * 4 + 3] > 200) return y; return -1; };
+    card.paint = [];
+    let x = Math.round(card.box.x0 + 8);
+    while (x < card.box.x1 - 8) {
+      const y = bottom(x);
+      if (y > 0 && rnd() < 0.55) card.paint.push({ x, y: y - 3, w: 5 + rnd() * 9, len: 25 + rnd() ** 1.6 * 300, t0: 0.5 + rnd() * 1.4, sp: 0.6 + rnd() * 0.8 });
+      x += 22 + Math.round(rnd() * 40);
+    }
+    // ink flicked off the brush: specks and a few splashes around the words
+    card.specks = [];
+    for (let i = 0; i < 70; i++) {
+      const sx = card.box.x0 - 60 + rnd() * (card.box.x1 - card.box.x0 + 120);
+      const above = rnd() < 0.55;
+      const sy = above ? card.box.y0 - 6 - rnd() ** 1.5 * size * 0.9 : card.box.y1 + 10 + rnd() ** 1.5 * size * 1.2;
+      card.specks.push({ x: sx, y: sy, r: rnd() < 0.85 ? 1 + rnd() * 3.5 : 4 + rnd() * 7, k: Math.floor(rnd() * 3) });
+    }
+    return;
+  }
+  o.font = chalk ? '500 124px Caveat' : 'italic 116px "IM Fell English"';
   o.textAlign = 'center'; o.textBaseline = 'middle';
   o.fillStyle = chalk ? 'rgba(236,236,226,0.92)' : '#ece6d8';
   o.fillText(text, W / 2, H / 2);
@@ -86,6 +134,46 @@ function drip(x, top, w, len, color) {
 
 window.frame = (t) => {
   const e = card.effect, end = ${SECONDS};
+  if (e === 'drip') {
+    g.fillStyle = '#030303'; g.fillRect(0, 0, W, H);
+    const lit = window.__on.some(([a, b]) => t >= a && t < b);
+    if (lit) {
+      g.drawImage(off, 0, 0);
+      g.fillStyle = '#a3171a';
+      for (const p of card.specks) {
+        g.beginPath();
+        if (p.k === 0) g.ellipse(p.x, p.y, p.r * 1.6, p.r * 0.7, p.x % 3, 0, Math.PI * 2);
+        else g.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        g.fill();
+      }
+      for (const d of card.paint) {
+        const k = clamp((t - d.t0) / (end - d.t0)) * d.sp; if (k <= 0) continue;
+        const len = d.len * ease(clamp(k)) ;
+        g.fillStyle = '#a3171a';
+        g.fillRect(d.x - d.w / 2, d.y, d.w, len);
+        g.beginPath(); g.arc(d.x, d.y + len, d.w * 0.62, 0, Math.PI * 2); g.fill();
+      }
+    } else if (window.__on.some(([a]) => Math.abs(t - a) < 0.05)) {
+      g.globalAlpha = 0.18; g.drawImage(off, 0, 0); g.globalAlpha = 1;
+    }
+    vignette();
+    grain(t, 20);
+    return;
+  }
+  if (e === 'flicker') {
+    g.fillStyle = '#030303'; g.fillRect(0, 0, W, H);
+    const lit = window.__on.some(([a, b]) => t >= a && t < b);
+    if (lit) {
+      const level = 0.82 + 0.18 * Math.sin(t * 2 * Math.PI * 60) ** 2; // mains hum in the light
+      g.save(); g.globalAlpha = 0.5 * level; g.filter = 'blur(18px)'; g.drawImage(off, 0, 0); g.filter = 'none';
+      g.globalAlpha = level; g.drawImage(off, 0, 0); g.restore();
+    } else if (window.__on.some(([a]) => Math.abs(t - a) < 0.05)) {
+      g.globalAlpha = 0.12; g.drawImage(off, 0, 0); g.globalAlpha = 1; // the filament's afterglow
+    }
+    vignette();
+    grain(t, 22);
+    return;
+  }
   g.fillStyle = '#040404'; g.fillRect(0, 0, W, H);
   let shake = [0, 0];
   if (e === 'crack' && t > 1.05 && t < 1.25) shake = [(rnd() - 0.5) * 22, (rnd() - 0.5) * 14];
@@ -168,12 +256,21 @@ const SOUND = {
   stain: "aevalsrc='0.22*sin(2*PI*55*t)*min(t/2,1)+0.12*sin(2*PI*82.4*t)*min(t/2.4,1)':d=2.8[a];anoisesrc=color=brown:amplitude=0.15:d=2.8,lowpass=f=300[c];[a][c]amix=inputs=2:normalize=0,afade=t=in:d=0.5,afade=t=out:st=2.4:d=0.4",
 };
 
+function flickerSound(on) {
+  const lit = on.map(([a, b]) => `between(t,${a.toFixed(3)},${b.toFixed(3)})`).join('+');
+  const clicks = on.flatMap(([a, b]) => [a, b]).map((x) => `between(t,${x.toFixed(3)},${(x + 0.018).toFixed(3)})`).join('+');
+  return `aevalsrc='(0.10*sin(2*PI*120*t)+0.05*sin(2*PI*240*t)+0.03*sin(2*PI*360*t))*(0.15+0.85*min(1,${lit}))':d=${SECONDS}[h];` +
+    `anoisesrc=color=white:amplitude=0.6:d=${SECONDS},highpass=f=2500,volume='min(1,${clicks})':eval=frame[c];` +
+    `anoisesrc=color=brown:amplitude=0.08:d=${SECONDS},lowpass=f=200[r];[h][c][r]amix=inputs=3:normalize=0,afade=t=out:st=${SECONDS - 0.3}:d=0.3`;
+}
+
 const browser = await chromium.launch();
 const tab = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
 await tab.setContent(PAGE);
-await tab.evaluate(() => document.fonts.load('italic 104px "IM Fell English"').then(() => document.fonts.load('500 124px Caveat')));
+await tab.evaluate(() => Promise.all(['italic 116px "IM Fell English"', '500 124px Caveat', '170px "Permanent Marker"', '170px "Rubik Wet Paint"'].map((f) => document.fonts.load(f))));
 for (const [i, cardDef] of cards.entries()) {
-  const effect = SOUND[cardDef.effect] ? cardDef.effect : 'crack';
+  const effect = ['flicker', 'drip'].includes(cardDef.effect) ? cardDef.effect : SOUND[cardDef.effect] ? cardDef.effect : 'drip';
+  await tab.evaluate((f) => (window.__face = f), cardDef.face ?? process.env.TITLE_FACE ?? 'Rubik Wet Paint');
   const frames = join(outDir, `title-${i}-frames`);
   rmSync(frames, { recursive: true, force: true });
   mkdirSync(frames, { recursive: true });
@@ -185,7 +282,7 @@ for (const [i, cardDef] of cards.entries()) {
   }
   const out = join(outDir, `title-${i}.mp4`);
   ff('-framerate', String(FPS), '-i', join(frames, '%04d.jpg'), '-f', 'lavfi', '-t', String(SECONDS), '-i', 'anullsrc=r=48000:cl=stereo',
-    '-filter_complex', `${SOUND[effect]},aformat=sample_rates=48000:channel_layouts=stereo[s]`, '-map', '0:v', '-map', '[s]',
+    '-filter_complex', `${effect === 'flicker' || effect === 'drip' ? flickerSound(await tab.evaluate(() => window.__on)) : SOUND[effect]},aformat=sample_rates=48000:channel_layouts=stereo[s]`, '-map', '0:v', '-map', '[s]',
     '-c:v', 'libx264', '-crf', '16', '-preset', 'medium', '-pix_fmt', 'yuv420p', '-r', '30', '-c:a', 'aac', '-b:a', '256k', '-ar', '48000', '-ac', '2', '-t', String(SECONDS), out);
   rmSync(frames, { recursive: true, force: true });
   console.log('title', i, effect, cardDef.text);

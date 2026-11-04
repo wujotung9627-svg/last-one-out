@@ -113,7 +113,7 @@ const cards = {
     <div class="row" style="gap:56px">
       <div style="flex:0 0 600px;display:flex;flex-direction:column;gap:34px;justify-content:center;height:100%">
         <h1>The speaker calls your name. Answer out loud.</h1>
-        <p class="say" style="font-size:31px">The microphone hears you; Muse Voice Transcribe checks you said “here” (there is a Here button too). Then every head turns.</p>
+        <p class="say" style="font-size:30px">When the night was played live, Muse Voice Transcribe checked that the answer was “here”. In the judges' version the microphone only listens for your voice, or you press Here. Then every head turns.</p>
         <p class="say" style="font-size:24px;color:#8e887b">Your name never leaves the browser.</p>
       </div>
       <div class="shot" style="flex:1"><img src="${src(turn?.photo ?? room.photo)}"></div>
