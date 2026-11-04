@@ -145,7 +145,7 @@ The contact sheets show frames of each beat, labelled with the beat id and time.
 
 Make a trailer of 70 to 85 seconds of footage, in story order, that a stranger can follow: they should understand what the player does and what happens.
 - Choose 6 to 8 beats and let each one play long enough to see what happens and to read the line under the photo, at least 7 seconds each. You may trim a beat to a sub-range with "from" and "to" (seconds). Cut points that fall inside a line under the photo, a speaker announcement or a scare are moved to its edge afterwards. Keep these whole: the chalkboard choice (both erasures and the kept line being rewritten), the teacher scare, the basketball rolling to the player's feet, and the roll call through every head turning.
-- Write 4 title cards. Each is shown full screen for about 4 seconds BEFORE a beat ("before": beat id), words in dripping dark-red paint on black that flicker like a failing fluorescent light. Each card plainly tells the viewer what they are about to see the player do or face (for example what the chalkboard choice is), so the trailer can be understood without playing. Grammatical, natural English a native speaker would write for a film trailer (with articles and apostrophes, e.g. "the teachers' office"), at most 8 words, no exclamation marks, never repeating a line the game shows, never giving a scare away. Do not mention typing memories: in this replay they are fixed.
+- Write 4 title cards. Each is shown full screen for about 5 seconds BEFORE a beat ("before": beat id), words in dry-brush handwriting on black, fading in and out. Each card plainly tells the viewer what they are about to see the player do or face (for example what the chalkboard choice is), so the trailer can be understood without playing. Grammatical, natural English a native speaker would write for a film trailer (with articles and apostrophes, e.g. "the teachers' office"), at most 8 words, no exclamation marks, never repeating a line the game shows, never giving a scare away. Do not mention typing memories: in this replay they are fixed.
 Answer with JSON only: {"shots":[{"beat":"b3","from":12.0,"to":19.5}],"titles":[{"before":"b3","text":"..."}]}`;
   const content = [{ type: 'text', text: prompt }, ...sheets.map((f) => ({ type: 'image_url', image_url: { url: `data:image/jpeg;base64,${readFileSync(f).toString('base64')}` } }))];
   // Muse Spark reasons first and the reasoning counts towards the limit: allow plenty, and
@@ -205,7 +205,7 @@ function finalize(plan, list) {
   // The whole video must stay under three minutes: the afternoon after goes first (the
   // contact book card shows it).
   const footage = () => plan.shots.reduce((n, x) => n + x.end - x.start, 0);
-  if (footage() > 90) plan.shots = plan.shots.filter((x) => x.beat !== 'ending');
+  if (footage() > Number(process.env.FOOTAGE_MAX || 84)) plan.shots = plan.shots.filter((x) => x.beat !== 'ending');
   writeFileSync(join(WORK, 'plan.json'), JSON.stringify(plan, null, 2));
   const total = plan.shots.reduce((n, s) => n + s.end - s.start, 0);
   console.log(`Muse Spark: ${plan.shots.length} shots, ${total.toFixed(1)} s of footage, ${plan.titles.length} title cards`);
@@ -249,13 +249,16 @@ async function build() {
 
   // 1. the title cards (animated, with their own sound)
   const titlesJson = join(WORK, 'titles.json');
-  writeFileSync(titlesJson, JSON.stringify(plan.titles.map((x) => ({ text: x.text, effect: 'drip' }))));
-  execFileSync('node', [join(HERE, 'titles.mjs'), join(WORK, 'titles'), titlesJson], { stdio: 'inherit' });
+  // The opening words come first, the way the game itself begins; then Muse Spark's four cards.
+  const OPENING = 'In Taiwan, the student on duty is the last one out.';
+  writeFileSync(titlesJson, JSON.stringify([{ text: OPENING, effect: 'brush' }, ...plan.titles.map((x) => ({ text: x.text, effect: 'brush' }))]));
+  execFileSync('node', [join(HERE, 'titles.mjs'), join(WORK, 'titles'), titlesJson], { stdio: 'inherit', env: { ...process.env, TITLE_SECONDS: '5' } });
 
   // 2. the trailer: Muse Spark's shots, each preceded by its title card
+  parts.push(join(WORK, 'titles', 'title-0.mp4'));
   for (const [i, s] of plan.shots.entries()) {
     const ti = plan.titles.findIndex((x) => x.before === s.beat);
-    if (ti >= 0) parts.push(join(WORK, 'titles', `title-${ti}.mp4`));
+    if (ti >= 0) parts.push(join(WORK, 'titles', `title-${ti + 1}.mp4`));
     const dur = s.end - s.start;
     const out = join(WORK, `shot-${i}.mp4`);
     ff('-ss', String(s.start), '-t', String(dur), '-i', VIDEO,
@@ -277,13 +280,45 @@ async function build() {
   const C = join(WORK, 'cards');
   const how = join(WORK, 'how.png');
   await png(`<div style="height:1080px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;color:#f1ece0"><div style="font:400 120px 'Bebas Neue';letter-spacing:.03em">How it is made</div><div style="font:400 34px 'Courier Prime';color:#b9b3a6;max-width:1400px;text-align:center;line-height:1.5">Every photo you just saw was made by Meta's models in one live game, recorded for the judges' version.</div></div>`, how);
-  parts.push(card(how, 3, 'how', 0.02));
-  parts.push(card(join(C, '1-bible.png'), 9, 'c1'));
-  parts.push(card(join(C, '2-depth.png'), 8, 'c2'));
-  parts.push(card(join(C, '3-sam.png'), 9, 'c3'));
-  parts.push(card(join(C, '4-edit.png'), 10, 'c4'));
-  parts.push(card(join(C, '5-voice.png'), 7, 'c5'));
-  parts.push(card(join(C, '6-book.png'), 9, 'c6'));
+  parts.push(card(how, 2.5, 'how', 0.02));
+  // How the school is made: a live game (not the replay) typing three memories, the wait sped
+  // up, and the first photo arriving. GEN_REC = a record.mjs folder of a live run.
+  const GEN = process.env.GEN_REC && resolve(process.env.GEN_REC);
+  if (GEN && existsSync(join(GEN, 'events.json'))) {
+    const ge = JSON.parse(readFileSync(join(GEN, 'events.json'), 'utf8'));
+    const gv = join(GEN, 'game.mp4');
+    if (!existsSync(gv)) ff('-i', join(GEN, 'game.webm'), '-vf', 'fps=30,format=yuv420p', '-c:v', 'libx264', '-preset', 'medium', '-crf', '14', '-c:a', 'aac', '-b:a', '256k', '-ar', '48000', '-ac', '2', gv);
+    const walkAt = ge.find((e) => e.type === 'change' && e.key === 'screen' && e.value === 'walk-screen')?.t ?? 13;
+    const photoAt = ge.find((e) => e.type === 'change' && e.key === 'photo' && e.value && e.t > walkAt + 1)?.t ?? walkAt + 28;
+    const cap = async (text, name) => {
+      const file = join(WORK, `${name}.png`);
+      await tab.setContent(`<style>${FONTS}*{margin:0}html,body{width:1920px;height:1080px;background:transparent}</style><div style="position:absolute;left:0;right:0;top:0;height:150px;background:linear-gradient(#000e,#0000);display:flex;justify-content:center;align-items:flex-start;padding-top:26px;font:400 44px 'Courier Prime';color:#f1ece0;letter-spacing:.03em">${text}</div>`);
+      await tab.evaluate(() => document.fonts.ready);
+      await tab.waitForTimeout(250);
+      await tab.screenshot({ path: file, omitBackground: true });
+      return file;
+    };
+    const capA = await cap('Three memories and a year', 'gen-cap-a');
+    const capB = await cap('Muse Image photographs a school from them', 'gen-cap-b');
+    const seg = (name, from, to, speed, capPng, mute) => {
+      const out = join(WORK, `${name}.mp4`);
+      const dur = (to - from) / speed;
+      const v = `[0:v]setpts=PTS/${speed},fps=30[s];[s][1:v]overlay=0:0,fade=t=in:st=0:d=0.3,fade=t=out:st=${(dur - 0.3).toFixed(2)}:d=0.3[v]`;
+      const tempo = speed === 1 ? 'anull' : speed <= 2 ? `atempo=${speed}` : 'atempo=2,atempo=2,atempo=2';
+      ff('-ss', String(from), '-t', String(to - from), '-i', gv, '-loop', '1', '-t', String(dur), '-i', capPng, '-f', 'lavfi', '-t', String(dur), '-i', 'anullsrc=r=48000:cl=stereo',
+        '-filter_complex', `${v};${mute ? '[2:a]anull' : `[0:a]${tempo}`},afade=t=in:d=0.2,afade=t=out:st=${(dur - 0.3).toFixed(2)}:d=0.3[a]`, '-map', '[v]', '-map', '[a]', ...ENC, '-t', String(dur), out);
+      return out;
+    };
+    parts.push(seg('gen-a', Math.max(0, walkAt - 7.2), walkAt, 2, capA, false));
+    parts.push(seg('gen-b', walkAt, photoAt - 0.6, 8, capB, true));
+    parts.push(seg('gen-c', photoAt - 0.6, photoAt + 3.6, 1, capB, false));
+  }
+  parts.push(card(join(C, '1-bible.png'), 7.5, 'c1'));
+  parts.push(card(join(C, '2-depth.png'), 7, 'c2'));
+  parts.push(card(join(C, '3-sam.png'), 7.5, 'c3'));
+  parts.push(card(join(C, '4-edit.png'), 9, 'c4'));
+  parts.push(card(join(C, '5-voice.png'), 6, 'c5'));
+  parts.push(card(join(C, '6-book.png'), 8, 'c6'));
 
   // 4. the end card
   const end = join(WORK, 'end.png');
@@ -292,9 +327,10 @@ async function build() {
     <div style="font:italic 400 44px 'IM Fell English';color:#e6dfcf">Play it: ${PLAY_URL.replace('https://', '')}</div>
     <div style="font:400 30px 'Courier Prime';color:#c9a227">${REPO_URL}</div>
     <div style="font:400 30px 'Courier Prime';color:#c9c3b5;margin-top:14px">Muse Spark · Muse Image · SAM 3.1 · Muse Voice Transcribe</div>
+    <div style="font:italic 400 34px 'IM Fell English';color:#e6dfcf">Next: walk into it on Meta Quest (planned)</div>
     <div style="font:400 25px 'Courier Prime';color:#9d978a;max-width:1450px;line-height:1.5">Recorded from the replay at the link above: one night played live, every photo made by Meta's models.<br>Muse Spark watched the recording and chose the trailer's shots and title cards.</div>
     <div style="font:400 25px 'Courier Prime';color:#9d978a">Built during the Meta Global AI Developer Hackathon, Oct 27 – Nov 4, 2026 · JO TUNG WU</div></div>`, end);
-  parts.push(card(end, 8, 'end', 0.015));
+  parts.push(card(end, 6.5, 'end', 0.015));
   await browser.close();
 
   // Decode every part on its own and join with the concat filter (stream copy breaks on
@@ -306,7 +342,7 @@ async function build() {
   ff(...parts.flatMap((p) => ['-i', p]), '-filter_complex', graph, '-map', '[v]', '-map', '[a]', ...ENC, joined);
   // Quiet horror sound with loud stings: lift it and let a limiter catch the stings.
   const final = join(REC, 'demo.mp4');
-  ff('-i', joined, '-c:v', 'copy', '-af', 'volume=3dB,alimiter=limit=0.56:attack=1:release=60:level=false', '-c:a', 'aac', '-b:a', '256k', '-ar', '48000', final);
+  ff('-i', joined, '-c:v', 'copy', '-af', 'volume=5dB,alimiter=limit=0.56:attack=1:release=60:level=false', '-c:a', 'aac', '-b:a', '256k', '-ar', '48000', final);
   console.log('demo', final, probe(final).toFixed(1), 's');
 }
 

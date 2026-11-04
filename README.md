@@ -57,6 +57,10 @@ browser (public/)                                server.mjs (Node, no packages) 
 
 The submission video is a recording of the judges' version, cut with the help of Muse Spark: it watched the recording and chose the trailer's shots and title cards. The "how it is made" cards show the night's own photos, depth maps and SAM 3.1 boxes. The scripts are in `video/` (see `video/README.md`).
 
+## What's next
+
+Meta Quest. Every place is already a 3D surface built from the depth map Muse Image draws for each photo, so the next step is to open the same walk in the Quest browser with WebXR: standing in the corridor, turning your head to the sound of the basketball, answering the roll call out loud in the headset. This is a plan; it is not built yet.
+
 ## Built during the event
 
 This repository started on 2026-11-03 (Taipei time). Everything here was written during the hackathon; the commit history shows what was added and when.

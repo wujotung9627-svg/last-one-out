@@ -21,11 +21,11 @@ const [outDir, listFile] = process.argv.slice(2).map((p) => resolve(p));
 const cards = JSON.parse(readFileSync(listFile, 'utf8'));
 mkdirSync(outDir, { recursive: true });
 const FPS = 30;
-const SECONDS = Number(process.env.TITLE_SECONDS || 4.4); // long enough to read
+const SECONDS = Number(process.env.TITLE_SECONDS || 6); // long enough to read, and for the paint to run
 const ff = (...args) => execFileSync('ffmpeg', ['-hide_banner', '-v', 'error', '-y', ...args], { stdio: ['ignore', 'inherit', 'inherit'] });
 
 const PAGE = `<!doctype html><html><head><meta charset="utf-8">
-<style>@import url('https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&family=Caveat:wght@500&family=Permanent+Marker&family=Rubik+Wet+Paint&display=swap');
+<style>@import url('https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&family=Caveat:wght@500&family=Permanent+Marker&family=Rubik+Wet+Paint&family=East+Sea+Dokdo&family=Nanum+Brush+Script&display=swap');
 html,body{margin:0;background:#000;overflow:hidden}canvas{display:block}</style></head>
 <body><canvas id="c" width="1920" height="1080"></canvas><script>
 const W = 1920, H = 1080, c = document.getElementById('c'), g = c.getContext('2d');
@@ -50,38 +50,58 @@ window.setup = (text, effect, s) => {
   card = { text, effect, drips: [], runs: [], crack: null, stain: [] };
   const chalk = effect === 'smear';
   o.clearRect(0, 0, W, H);
-  if (effect === 'drip') {
-    const face = window.__face || 'Rubik Wet Paint';
-    // one line, or two lines split at the space nearest the middle, as large as fits
+  if (effect === 'drip' || effect === 'brush') {
+    const brush = effect === 'brush';
+    const face = window.__face || (brush ? 'East Sea Dokdo' : 'Rubik Wet Paint');
+    // as large as fits: up to three rows, wrapped at spaces, 88% of the width
     const words = text.split(' ');
-    let rows = [text];
-    let size = 160;
-    o.font = size + 'px "' + face + '"';
-    if (o.measureText(text).width > W * 0.84 && words.length > 2) {
-      let best = 1, diff = Infinity;
-      for (let i = 1; i < words.length; i++) { const d = Math.abs(words.slice(0, i).join(' ').length - words.slice(i).join(' ').length); if (d < diff) (diff = d), (best = i); }
-      rows = [words.slice(0, best).join(' '), words.slice(best).join(' ')];
+    let size = 250, rows = [text];
+    const wrap = () => {
+      const out = [];
+      let line = '';
+      for (const w of words) {
+        const next = line ? line + ' ' + w : w;
+        if (line && o.measureText(next).width > W * 0.88) (out.push(line), (line = w));
+        else line = next;
+      }
+      out.push(line);
+      return out;
+    };
+    for (; size > 90; size -= 6) {
+      o.font = size + 'px "' + face + '"';
+      rows = wrap();
+      if (rows.length <= 3 && rows.length * size * 1.1 < H * 0.62) break;
     }
     const widest = () => Math.max(...rows.map((r) => o.measureText(r).width));
-    while (widest() > W * 0.84 && size > 80) { size -= 6; o.font = size + 'px "' + face + '"'; }
     o.textAlign = 'center'; o.textBaseline = 'middle';
-    o.fillStyle = '#a3171a';
-    const lh = size * 1.12, top = H / 2 - 50 - ((rows.length - 1) * lh) / 2;
+    o.fillStyle = brush ? '#e4dfd2' : '#a3171a';
+    const lh = size * (brush ? 0.98 : 1.08), top = H / 2 - 70 - ((rows.length - 1) * lh) / 2;
     rows.forEach((r, i) => o.fillText(r, W / 2, top + i * lh));
+    card.size = size;
     card.box = { x0: W / 2 - widest() / 2, x1: W / 2 + widest() / 2, y0: top - size * 0.5, y1: top + (rows.length - 1) * lh + size * 0.5 };
+    // slow, three blinks, then steady until it fades (the brush card simply fades in)
+    window.__on = brush ? [[0.2, ${SECONDS} - 0.3]] : [[0.3, 0.46], [0.68, 0.8], [1.0, ${SECONDS} - 0.4]];
     // the lowest painted pixel in each column: where paint can run from
     const img = o.getImageData(0, 0, W, H).data;
     const bottom = (x) => { for (let y = Math.min(H - 1, Math.round(card.box.y1 + size * 0.4)); y > card.box.y0; y--) if (img[(y * W + x) * 4 + 3] > 200) return y; return -1; };
     card.paint = [];
+    card.trails = [];
+    if (brush) {
+      // a dry brush drags on below each stroke: thin, broken streaks of thinning ink
+      for (let x = Math.round(card.box.x0); x < card.box.x1; x += 3 + Math.round(rnd() * 9)) {
+        const y = bottom(x);
+        if (y > 0 && rnd() < 0.42) card.trails.push({ x, y: y - 2, w: 0.8 + rnd() * 2.6, len: 12 + rnd() ** 2.6 * size * 1.9, a: 0.2 + rnd() * 0.6, gaps: Math.floor(rnd() * 3) });
+      }
+    }
     let x = Math.round(card.box.x0 + 8);
     while (x < card.box.x1 - 8) {
       const y = bottom(x);
-      if (y > 0 && rnd() < 0.55) card.paint.push({ x, y: y - 3, w: 5 + rnd() * 9, len: 25 + rnd() ** 1.6 * 300, t0: 0.5 + rnd() * 1.4, sp: 0.6 + rnd() * 0.8 });
-      x += 22 + Math.round(rnd() * 40);
+      if (!brush && y > 0 && rnd() < 0.72) card.paint.push({ x, y: y - 4, w: 6 + rnd() * 11, len: 90 + rnd() ** 1.3 * 440, t0: 1.05 + rnd() * 1.5 });
+      x += 18 + Math.round(rnd() * 34);
     }
     // ink flicked off the brush: specks and a few splashes around the words
     card.specks = [];
-    for (let i = 0; i < 70; i++) {
+    for (let i = 0; i < (brush ? 0 : 70); i++) {
       const sx = card.box.x0 - 60 + rnd() * (card.box.x1 - card.box.x0 + 120);
       const above = rnd() < 0.55;
       const sy = above ? card.box.y0 - 6 - rnd() ** 1.5 * size * 0.9 : card.box.y1 + 10 + rnd() ** 1.5 * size * 1.2;
@@ -134,10 +154,43 @@ function drip(x, top, w, len, color) {
 
 window.frame = (t) => {
   const e = card.effect, end = ${SECONDS};
+  if (e === 'brush') {
+    g.fillStyle = '#040404'; g.fillRect(0, 0, W, H);
+    const fadeIn = ease(clamp((t - 0.2) / 1.0)), fadeOut = 1 - ease(clamp((t - (end - 0.6)) / 0.6));
+    g.globalAlpha = fadeIn * fadeOut;
+    // the ink feathers a little into the paper
+    const soak = ease(clamp((t - 0.8) / 3.5));
+    g.globalAlpha = fadeIn * fadeOut * 0.22; g.filter = 'blur(' + (1 + soak * 3).toFixed(1) + 'px)'; g.drawImage(off, 0, soak * 2); g.filter = 'none';
+    g.globalAlpha = fadeIn * fadeOut; g.drawImage(off, 0, 0);
+    // the dry brush keeps dragging downward, slowly
+    for (const d of card.trails) {
+      const k = ease(clamp((t - 0.6) / (end - 1.4)));
+      const len = d.len * (0.35 + 0.65 * k);
+      const grad = g.createLinearGradient(0, d.y, 0, d.y + len);
+      grad.addColorStop(0, 'rgba(228,223,210,' + d.a + ')'); grad.addColorStop(1, 'rgba(228,223,210,0)');
+      g.fillStyle = grad;
+      if (d.gaps) { const cut = len * 0.55; g.fillRect(d.x, d.y, d.w, cut); g.fillRect(d.x, d.y + cut + 6, d.w * 0.7, len - cut - 6); }
+      else g.fillRect(d.x, d.y, d.w, len);
+    }
+    g.globalAlpha = 1;
+    vignette();
+    grain(t, 16);
+    return;
+  }
   if (e === 'drip') {
     g.fillStyle = '#030303'; g.fillRect(0, 0, W, H);
     const lit = window.__on.some(([a, b]) => t >= a && t < b);
     if (lit) {
+      // the paint soaks outward, like ink into wet paper
+      const soak = ease(clamp((t - 1.2) / 3.6));
+      if (soak > 0) {
+        for (let i = 1; i <= 4; i++) {
+          g.globalAlpha = 0.2;
+          g.filter = 'blur(' + (soak * (2 + i * 4.5)).toFixed(1) + 'px)';
+          g.drawImage(off, (i % 2 ? 1 : -1) * soak * i * 0.8, soak * i * 2.2);
+        }
+        g.filter = 'none'; g.globalAlpha = 1;
+      }
       g.drawImage(off, 0, 0);
       g.fillStyle = '#a3171a';
       for (const p of card.specks) {
@@ -146,18 +199,22 @@ window.frame = (t) => {
         else g.arc(p.x, p.y, p.r, 0, Math.PI * 2);
         g.fill();
       }
+      // thick paint: slow to start, then running
       for (const d of card.paint) {
-        const k = clamp((t - d.t0) / (end - d.t0)) * d.sp; if (k <= 0) continue;
-        const len = d.len * ease(clamp(k)) ;
+        const k = clamp((t - d.t0) / (end - 0.4 - d.t0));
+        if (k <= 0) continue;
+        const len = d.len * k ** 1.35;
         g.fillStyle = '#a3171a';
         g.fillRect(d.x - d.w / 2, d.y, d.w, len);
-        g.beginPath(); g.arc(d.x, d.y + len, d.w * 0.62, 0, Math.PI * 2); g.fill();
+        g.beginPath(); g.arc(d.x, d.y + len, d.w * 0.7, 0, Math.PI * 2); g.fill();
+        g.fillStyle = 'rgba(255,120,110,0.18)'; g.fillRect(d.x - d.w * 0.3, d.y, Math.max(1, d.w * 0.15), len); // wet sheen
       }
-    } else if (window.__on.some(([a]) => Math.abs(t - a) < 0.05)) {
-      g.globalAlpha = 0.18; g.drawImage(off, 0, 0); g.globalAlpha = 1;
+    } else if (window.__on.some(([a]) => Math.abs(t - a) < 0.06)) {
+      g.globalAlpha = 0.2; g.drawImage(off, 0, 0); g.globalAlpha = 1;
     }
     vignette();
-    grain(t, 20);
+    grain(t, 18);
+    if (t > end - 0.45) { g.fillStyle = 'rgba(0,0,0,' + clamp((t - (end - 0.45)) / 0.45) + ')'; g.fillRect(0, 0, W, H); }
     return;
   }
   if (e === 'flicker') {
@@ -256,6 +313,9 @@ const SOUND = {
   stain: "aevalsrc='0.22*sin(2*PI*55*t)*min(t/2,1)+0.12*sin(2*PI*82.4*t)*min(t/2.4,1)':d=2.8[a];anoisesrc=color=brown:amplitude=0.15:d=2.8,lowpass=f=300[c];[a][c]amix=inputs=2:normalize=0,afade=t=in:d=0.5,afade=t=out:st=2.4:d=0.4",
 };
 
+// the brush card: only the room, a low hum and air, swelling and gone
+const BRUSH_SOUND = `anoisesrc=color=brown:amplitude=0.12:d=${SECONDS},lowpass=f=260[r];aevalsrc='0.05*sin(2*PI*60*t)+0.025*sin(2*PI*120*t)':d=${SECONDS}[h];[r][h]amix=inputs=2:normalize=0,afade=t=in:d=0.8,afade=t=out:st=${SECONDS - 0.8}:d=0.8`;
+
 function flickerSound(on) {
   const lit = on.map(([a, b]) => `between(t,${a.toFixed(3)},${b.toFixed(3)})`).join('+');
   const clicks = on.flatMap(([a, b]) => [a, b]).map((x) => `between(t,${x.toFixed(3)},${(x + 0.018).toFixed(3)})`).join('+');
@@ -267,10 +327,10 @@ function flickerSound(on) {
 const browser = await chromium.launch();
 const tab = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
 await tab.setContent(PAGE);
-await tab.evaluate(() => Promise.all(['italic 116px "IM Fell English"', '500 124px Caveat', '170px "Permanent Marker"', '170px "Rubik Wet Paint"'].map((f) => document.fonts.load(f))));
+await tab.evaluate(() => Promise.all(['italic 116px "IM Fell English"', '500 124px Caveat', '170px "Permanent Marker"', '250px "Rubik Wet Paint"', '250px "East Sea Dokdo"', '250px "Nanum Brush Script"'].map((f) => document.fonts.load(f))));
 for (const [i, cardDef] of cards.entries()) {
-  const effect = ['flicker', 'drip'].includes(cardDef.effect) ? cardDef.effect : SOUND[cardDef.effect] ? cardDef.effect : 'drip';
-  await tab.evaluate((f) => (window.__face = f), cardDef.face ?? process.env.TITLE_FACE ?? 'Rubik Wet Paint');
+  const effect = ['flicker', 'drip', 'brush'].includes(cardDef.effect) ? cardDef.effect : SOUND[cardDef.effect] ? cardDef.effect : 'brush';
+  await tab.evaluate((f) => (window.__face = f), cardDef.face ?? process.env.TITLE_FACE ?? null);
   const frames = join(outDir, `title-${i}-frames`);
   rmSync(frames, { recursive: true, force: true });
   mkdirSync(frames, { recursive: true });
@@ -282,7 +342,7 @@ for (const [i, cardDef] of cards.entries()) {
   }
   const out = join(outDir, `title-${i}.mp4`);
   ff('-framerate', String(FPS), '-i', join(frames, '%04d.jpg'), '-f', 'lavfi', '-t', String(SECONDS), '-i', 'anullsrc=r=48000:cl=stereo',
-    '-filter_complex', `${effect === 'flicker' || effect === 'drip' ? flickerSound(await tab.evaluate(() => window.__on)) : SOUND[effect]},aformat=sample_rates=48000:channel_layouts=stereo[s]`, '-map', '0:v', '-map', '[s]',
+    '-filter_complex', `${effect === 'brush' ? BRUSH_SOUND : effect === 'flicker' || effect === 'drip' ? flickerSound(await tab.evaluate(() => window.__on)) : SOUND[effect]},aformat=sample_rates=48000:channel_layouts=stereo[s]`, '-map', '0:v', '-map', '[s]',
     '-c:v', 'libx264', '-crf', '16', '-preset', 'medium', '-pix_fmt', 'yuv420p', '-r', '30', '-c:a', 'aac', '-b:a', '256k', '-ar', '48000', '-ac', '2', '-t', String(SECONDS), out);
   rmSync(frames, { recursive: true, force: true });
   console.log('title', i, effect, cardDef.text);

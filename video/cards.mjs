@@ -57,9 +57,18 @@ const pills = (...names) => `<div class="top">${names.map(([n, c]) => `<span cla
 const boxes = (s) => {
   const out = [];
   const add = (b, label, color) => b && out.push(`<div class="box" style="left:${b.x * 100}%;top:${b.y * 100}%;width:${b.w * 100}%;height:${b.h * 100}%;border-color:${color}"><span style="background:${color}">${label}</span></div>`);
-  (s.doors ?? []).slice(0, 2).forEach((d) => add(d, d.open ? 'open door' : 'door', '#7fd18b'));
+  // the doors the game keeps: no slivers at the picture's edge, no cupboard doors
+  const doorLike = (d) => {
+    const atEdge = d.x < 0.01 || d.x + d.w > 0.99;
+    if (atEdge && d.w < 0.06) return false;
+    if (s.id !== 'door' && (d.h < 0.18 || d.y + d.h < 0.45)) return false;
+    if (s.id === 'corridor' && d.h < 0.25) return false;
+    return true;
+  };
+  (s.doors ?? []).filter(doorLike).slice(0, 2).forEach((d) => add(d, d.open ? 'open door' : 'door', '#7fd18b'));
   add(s.board, 'chalkboard', '#f0d264');
-  add(s.tv, 'TV', '#7fb3c8');
+  if (s.screen) add(s.screen, 'TV screen', '#7fb3c8');
+  else add(s.tv, 'TV', '#7fb3c8');
   (s.papers ?? []).slice(0, 1).forEach((p) => add(p, 'exam papers', '#e58b7f'));
   add(s.notice, 'ranking', '#e58b7f');
   return out.join('');
@@ -94,7 +103,7 @@ const cards = {
     <div class="row" style="gap:56px">
       <div style="flex:0 0 560px;display:flex;flex-direction:column;gap:34px;justify-content:center;height:100%">
         <h1>Making a generated photo playable</h1>
-        <p class="say" style="font-size:31px">SAM 3.1 finds the doors you can open, the chalkboard where you choose, the papers that carry your name and the TV that wakes at roll call.</p>
+        <p class="say" style="font-size:31px">SAM 3.1 finds the doors you can walk through, the chalkboard where you choose, the papers that carry your name and the TV screen that fills with static at roll call.</p>
       </div>
       <div class="shot" style="flex:1"><img src="${src(room.photo)}">${boxes(room)}</div>
     </div>`),
