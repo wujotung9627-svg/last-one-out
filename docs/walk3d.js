@@ -300,19 +300,30 @@ export function createWalker(canvas) {
     // second as it settles from slightly behind into place.
     // warp (0 = none, ~1 = strong) grows with every walk: the dolly zoom, the breathing
     // walls and the lens split all get worse the longer you stay.
+    // A photo whose depth map arrived later: its next use loads the real depth.
+    forget(url) {
+      const old = cache.get(url);
+      if (!old) return;
+      gl.deleteTexture(old.photo);
+      gl.deleteTexture(old.depth);
+      cache.delete(url);
+    },
+
     async walk(from, to, ms, { warp = 0 } = {}) {
       const [a, b] = await Promise.all([prepare(from), prepare(to)]);
       await animate(ms, (k) => {
         const go = ease(clamp01(k / 0.8));
         const bob = Math.sin(k * Math.PI * 6) * 0.012 * (1 - k); // three footsteps
         const sway = Math.sin(k * Math.PI * 3) * 0.006 * (1 + warp);
-        const cross = ease(clamp01((k - 0.55) / 0.45));
+        // Into the dark first, then the next photo: a short overlap, no double image.
+        const dim = clamp01((k - 0.58) / 0.22);
+        const cross = ease(clamp01((k - 0.76) / 0.24));
         const peak = Math.sin(k * Math.PI);
         const layers = [
           {
             entry: a,
             cam: [sway, bob, -WALK_DEPTH * go],
-            alpha: 1,
+            alpha: 1 - 0.75 * dim,
             lens: 1 + warp * 0.45 * go,
             wobble: warp * peak,
             split: warp * 0.012 * peak,

@@ -42,23 +42,37 @@ try {
   const school = await post('/api/school', { memories: ['a banyan tree', 'the teacher', 'the ranking'], lang: 'en', year: 2008 });
   schoolId = school.schoolId;
   check(school.draws === 2, 'two chalkboard choices');
-  check(school.bible.year === 2008 && school.bible.scores.length === 3, 'bible carries the year and three scores');
+  check(school.bible.year === 2008, 'the year comes back at once');
   check(!JSON.stringify(school).includes('"name"'), 'no player name anywhere in the reply');
   check(school.walk.scenes.map((s) => s.id).join() === 'corridor,door,classroom', 'first walk: corridor, door, classroom');
-  check(school.walk.scenes.every((s) => s.doors.length > 0), 'every scene has a door to click');
-  check(Boolean(school.walk.scenes[2].board), 'the classroom chalkboard is found');
+  check(Boolean(school.walk.scenes[0].photo) && school.walk.scenes.slice(1).every((s) => s.pending), 'the corridor comes first, the rest follows');
+  const views = await Promise.all(school.walk.scenes.map((s) => post('/api/scene', { schoolId, id: s.id })));
+  check(views.every((v) => v.view.doors.length > 0), 'every scene has a door to click');
+  check(Boolean(views[2].view.board), 'the classroom chalkboard is found');
+  check(views[2].bible?.scores?.length === 3, 'the bible reaches the page with the rest of the walk');
 
+  const lines = await post('/api/lines', { schoolId });
+  check(lines.lines?.length === 3 && lines.lines.every((l) => l.title), 'the three board lines are ready before the choice');
+  check((await post('/api/erase', { schoolId, index: 0 })).ok === true, 'erasing a line stops its version');
   const first = await post('/api/draw', { schoolId, index: 1 });
   check(first.cards.length === 3 && first.picked === 1 && first.last === false, 'first line kept');
   check(first.walk.scenes.map((s) => s.id).join() === 'corridor,door,office', 'second walk ends in the office');
-  const office = first.walk.scenes[2];
+  check(first.walk.scenes[0].doors.length > 0 && first.walk.scenes[2].pending, 'the next walk starts as soon as its corridor is ready');
+  const office = (await post('/api/scene', { schoolId, id: 'office' })).view;
   check(Boolean(office.board && office.notice && office.papers?.length), 'office board, bulletin board and papers are found');
-  check(first.walk.scare?.after === 'door' && Boolean(first.walk.flicker), 'second walk has the teacher scare and a flicker frame');
+  const scare1 = (await post('/api/extras', { schoolId, want: 'scare' })).scare;
+  const flicker1 = (await post('/api/extras', { schoolId, want: 'flicker' })).flicker;
+  check(scare1?.after === 'door' && Boolean(flicker1), 'second walk has the teacher scare and a flicker frame');
+  const lines2 = await post('/api/lines', { schoolId });
+  check(lines2.lines?.length === 3, 'the second board has its three lines');
 
   const second = await post('/api/draw', { schoolId, index: 2 });
   check(second.last === true, 'second line is the last');
   check(second.walk.scenes.map((s) => s.id).join() === 'corridor,door,classroom', 'last walk ends in the classroom');
-  check(second.walk.scare?.after === 'classroom', 'last walk has the lights-out scare');
+  const room = (await post('/api/scene', { schoolId, id: 'classroom' })).view;
+  check(Boolean(room.after), 'the last classroom is full, and empty afterwards');
+  const scare2 = (await post('/api/extras', { schoolId, want: 'scare' })).scare;
+  check(scare2?.after === 'classroom', 'last walk has the turn');
 
   const ending = await post('/api/ending', { schoolId });
   check(Boolean(ending.daylight && ending.comment && ending.changes.length === 2), 'ending has daylight, a note and both changes');
@@ -69,6 +83,7 @@ try {
   check(false, err.message);
 } finally {
   server.kill();
+  await new Promise((resolve) => setTimeout(resolve, 1500)); // the run is saved in the background
   if (schoolId) await rm(join(ROOT, 'runs', schoolId), { recursive: true, force: true });
 }
 

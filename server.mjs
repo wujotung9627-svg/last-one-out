@@ -112,7 +112,7 @@ const stopIfCancelled = () => {
 };
 
 // A call that hangs is abandoned and tried once more rather than holding up the walk.
-const CALL_TIMEOUT_MS = Number(process.env.CALL_TIMEOUT_MS || 100_000);
+const CALL_TIMEOUT_MS = Number(process.env.CALL_TIMEOUT_MS || 60_000); // a photo takes 15-30 s; past a minute it has hung
 
 async function callModel(path, body, attempt = 0) {
   stopIfCancelled();
@@ -286,32 +286,6 @@ async function findObjectsSafely(photoId, concept, sceneId) {
   }
 }
 
-async function photoShows(photoId, change) {
-  if (MOCK) return true;
-  try {
-    const { bytes } = await readPhoto(photoId);
-    const text = await chat(
-      [
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: `Does this photo clearly show this change: "${change}"? Reply with JSON only: {"shows": true or false}` },
-            { type: 'image_url', image_url: { url: dataUrl(bytes) } },
-          ],
-        },
-      ],
-      { effort: 'low', maxTokens: 4000 },
-    );
-    const verdict = parseJson(text);
-    if (!verdict) console.error('[check] no verdict; treating the change as shown');
-    return verdict?.shows !== false;
-  } catch (err) {
-    if (err.status === 402) throw err;
-    console.error(`[check] ${err.message}`);
-    return true; // a failed check never blocks the walk
-  }
-}
-
 // ---------- prompts ----------
 
 const HOUSE_STYLE = [
@@ -338,7 +312,7 @@ const SCENES = {
     concepts: { doors: 'door', board: 'chalkboard', tv: 'television', papers: 'paper' },
   },
   office: {
-    base: "Inside the teachers' office of an old Taiwanese school at night: grey metal teachers' desks pushed together in facing pairs, each with a sheet of glass over a green desk mat, stacks of graded exam papers with red pen marks, red pens in a mug, a thermos flask and a tea cup with a lid, wooden filing cabinets, venetian blinds, an old round wall clock, a small dark green chalkboard on the wall with faint half-erased chalk marks, a cork bulletin board with one long sheet of paper pinned in its centre (a class ranking list in tiny unreadable handwriting). Most fluorescent tubes are off; one desk lamp is on, and on the desk nearest the camera a single exam paper lies alone in its light, a red score circled at the top. The wooden door behind the camera is ajar.",
+    base: "Inside the teachers' office of an old Taiwanese school at night: grey metal teachers' desks pushed together in facing pairs, each with a sheet of glass over a green desk mat, stacks of graded exam papers with red pen marks, red pens in a mug, a thermos flask and a tea cup with a lid, wooden filing cabinets, venetian blinds, an old round wall clock, a small dark green chalkboard on the wall with faint half-erased chalk marks, a cork bulletin board with one long sheet of paper pinned in its centre (a class ranking list in tiny unreadable handwriting). Most fluorescent tubes are off; one desk lamp is on, and on the desk nearest the camera a single exam paper lies alone in its light, with an empty circle drawn in red at the top right and no numbers written anywhere on it. The wooden door behind the camera is ajar.",
     concepts: { doors: 'door', board: 'chalkboard', papers: 'paper', notice: 'bulletin board' },
   },
 };
@@ -373,6 +347,7 @@ const TRACES = {
 // The last classroom fills up: a class with its back to you, and then it turns around.
 const CROWD_SEATED = `Every seat is now taken: at each desk sits a tall, adult-sized humanoid figure in a white short-sleeved Taiwanese school shirt with navy trim, with navy trousers or a pleated navy-plaid skirt, sitting perfectly still and upright, facing the chalkboard with its back to the camera. Their hair is black and their posture is a little too stiff. ${'Keep everything else exactly the same: same camera position and angle, same lighting, same room, same photographic style.'}`;
 const CROWD_TURNED = [
+  'Every seated figure has twisted its head around to stare at the camera over its shoulder, all at the same moment. Their faces are smeared by motion blur, as if they turned during a long exposure: pale streaks where the faces should be, no features can be made out. Keep everything else exactly the same: same camera position and angle, same lighting, same room, same photographic style.',
   'Every seated figure has twisted its head around to stare straight at the camera over its shoulder, necks bent at impossible angles. Where each face should be there is only a smooth, blank, pale oval like unpainted plaster, each one slightly lopsided and warped, a few cracked, no eyes, no nose, no mouth. Keep everything else exactly the same: same camera position and angle, same lighting, same room, same photographic style.',
   'Every seated figure has twisted its head around to stare straight at the camera over its shoulder, necks bent at impossible angles. Where each face should be there is only a smooth, blank, pale oval like unpainted plaster, no eyes, no nose, no mouth. Keep everything else exactly the same: same camera position and angle, same lighting, same room, same photographic style.',
   'Every seated figure has turned around in its chair to face the camera. Each head is entirely wrapped in crumpled exam papers covered in red pen marks, like a tight paper mask; no face is visible. Keep everything else exactly the same: same camera position and angle, same lighting, same room, same photographic style.',
@@ -380,13 +355,23 @@ const CROWD_TURNED = [
 
 // The creatures are near-human and dressed as people from the school, and never have a face.
 const TEACHER_CLOTHES = 'a beige knitted cardigan over a pale shirt, dark slacks, black leather shoes';
-const teacherCreature = (clothes) =>
-  `a tall, too-thin humanoid figure dressed like a homeroom teacher (${clothes || TEACHER_CLOTHES}), its neck a little too long and its head tilted at a wrong angle; where the face should be there is only a smooth, blank, pale oval like unpainted plaster, with no eyes, no nose and no mouth`;
+// The teacher wears a mask (the scarecrow method: something made to look like a face
+// is worse than no face). If the mask is refused, a blank plaster oval instead.
+const TEACHER_MASKS = [
+  'its head tilted sideways at a wrong angle, almost resting on its shoulder; over its face it wears a cracked white porcelain mask with two small painted black eyes and a tiny painted mouth, tied on with red string, straight black hair around the mask',
+  "its head tilted far to one side; it wears an old cracked ceramic doll's mask with two small painted eyes, held on by a red string, black hair falling around it",
+  'its head bent sideways; its face is covered by a chipped white mask like a school play prop, with two small painted eyes and a thin painted mouth, tied with red string',
+];
+const TEACHER_MASK = TEACHER_MASKS[0];
+const teacherCreature = (clothes, masked = true) =>
+  masked
+    ? `a tall, too-thin figure dressed like a homeroom teacher (${clothes || TEACHER_CLOTHES}), ${typeof masked === 'string' ? masked : TEACHER_MASK}`
+    : `a tall, too-thin humanoid figure dressed like a homeroom teacher (${clothes || TEACHER_CLOTHES}), its neck a little too long and its head tilted at a wrong angle; where the face should be there is only a smooth, blank, pale oval like unpainted plaster, with no eyes, no nose and no mouth`;
 const PAPER_HEAD =
   'one stiff humanoid figure in a white short-sleeved Taiwanese school shirt and navy trousers, its head entirely wrapped in crumpled exam papers covered in red pen marks like a tight paper mask, no face visible, shoulders uneven';
 
-const SCARE_TEACHER = (clothes) =>
-  `Add ${teacherCreature(clothes)}. It stands very close to the camera, about one and a half metres away in the middle of the corridor, facing the camera and filling much of the frame, lit harshly by the camera flash. ${KEEP}`;
+const SCARE_TEACHER = (clothes, masked = true) =>
+  `Add ${teacherCreature(clothes, masked)}, holding a class roll book against its chest. It stands very close to the camera, about one and a half metres away in the middle of the corridor, facing the camera and filling much of the frame, lit harshly by the camera flash. ${KEEP}`;
 const FLICKER_FIGURE = [
   null,
   `Add ${PAPER_HEAD}, standing far away at the very end of the corridor, small in the frame and easy to miss. ${KEEP}`,
@@ -405,10 +390,20 @@ const DEPTH_EDIT =
 const AI_DEPTH = process.env.AI_DEPTH !== 'off';
 // Asking Muse Spark whether each edit is visible costs ~15 s per photo; every photo now
 // changes on purpose, so the check is off unless asked for.
-const CHECK_EDITS = process.env.CHECK_EDITS === 'on';
 
 const DAYLIGHT_EDIT =
-  'Same classroom, same camera position and angle, now in warm late-afternoon daylight: windows bright, sunlight falling across the desks, fluorescent tubes off, every chair back in its place. Keep every object exactly where it is.';
+  'Same classroom, same camera position and angle, now in warm late-afternoon daylight: windows bright, sunlight falling across the desks, fluorescent tubes off, every chair back in its place. Keep every object exactly where it is. Nobody in the room, in the doorway or outside the windows.';
+// The ending: the teacher from the corridor is watching you from behind the door frame.
+// The model refuses the full creature here; these wordings get through.
+const DAYLIGHT_ROOM =
+  'Same classroom, same camera position and angle, now in warm late-afternoon daylight: windows bright, sunlight falling across the desks, fluorescent tubes off, every chair back in its place. Keep every object exactly where it is. The room is empty.';
+const DAYLIGHT_KEEP = 'Keep everything else exactly the same: same camera position and angle, same room, same photographic style.';
+const DAYLIGHT_PEEK = (clothes) => [
+  ...TEACHER_MASKS.map((mask) => `${DAYLIGHT_ROOM} At the classroom door, mostly hidden behind the door frame, ${teacherCreature(undefined, mask)} leans out to look in; only its shoulder and head show. ${DAYLIGHT_KEEP}`),
+  `${DAYLIGHT_ROOM} In the doorway, mostly hidden behind the door frame, stands a tall thin figure in ${clothes || 'a beige knitted cardigan'}; only its shoulder and its head show, a smooth blank pale oval like unpainted plaster, tilted to one side as it leans out from behind the frame. ${DAYLIGHT_KEEP}`,
+  `${DAYLIGHT_ROOM} Four long, thin, pale fingers curl around the edge of the classroom door frame at head height, as if someone tall is standing just out of sight behind it, looking in. Nothing else of them is visible. ${DAYLIGHT_KEEP}`,
+  DAYLIGHT_EDIT,
+];
 
 const BIBLE_SYSTEM = `You keep the memory of "Last One Out", a quiet horror walk through a remembered Taiwanese school at night. The player, the student on duty, gives up to three memories of their school and the year they were there. Write the memory bible that every later step follows: the same memories come back, changed, walk after walk.
 Rules: ordinary and physical; objects, light and space only. Never add people, faces, readable text, flags, statues, portraits, slogans or religious objects to the photo details. Nothing about death, injury, self-harm, politics or religion.
@@ -423,7 +418,8 @@ Reply with JSON only:
 "scores":[{"subject":"an exam subject in the player's language","subject_en":"the subject in English","score":a low score between 38 and 59}]}
 Give three scores and one thread per memory. Every memory must become at least one concrete, clearly visible physical detail in the photo details (put it in the photo where it belongs), so the player recognises their own school at once.`;
 
-const CARDS_SYSTEM = `You deal the choices in "Last One Out", a quiet horror game set in a remembered Taiwanese school at night. The player, the student on duty, walks the school three times. At the end of a walk three half-erased lines are on a chalkboard; the player keeps one, and that line decides how the next walk has changed.
+const CARDS_SYSTEM = `If "titles" are given, they are already written on the board: use them exactly, in that order, as the three titles, and make each card's edits show its line.
+You deal the choices in "Last One Out", a quiet horror game set in a remembered Taiwanese school at night. The player, the student on duty, walks the school three times. At the end of a walk three half-erased lines are on a chalkboard; the player keeps one, and that line decides how the next walk has changed.
 You get the memory bible (memories, era, threads that must come back changed), the walk being prepared, the changes already made, and the photos the next walk reuses.
 Walk 2 goes corridor -> classroom door -> teachers' office. Things are clearly wrong and space begins to bend: a tube light is dark and the corridor beyond it is far too long, the same door repeats into the distance, the duty student's red bucket stands where it could not be, the mop trail runs up the wall, every classroom door stands ajar. Bring back one memory thread, already wrong.
 Walk 3 goes corridor -> classroom door -> classroom, and it is the last. What hurt comes back through traces and space, never in person: a school uniform hanging on every chair, every desk pushed away from one desk left alone, every chair turned to face the camera, exam papers stacked to the ceiling, the shadows of a whole class on the floor with nobody casting them, a dark adult silhouette far away with its back turned. Bring back a memory thread at its worst.
@@ -434,18 +430,58 @@ Reply with JSON only:
 {"cards":[{"title":"at most 6 words in the player's language","whisper":"one short eerie line in the player's language","title_en":"the title in natural English","whisper_en":"the line in natural English","edits":{"<photo id>":"precise English instruction, or empty"},"sound":"none|silence|echo|bell|ball|laughter|giggle|running|chalk|chair|papers|speaker|water"}]}
 Sounds: ball = a ball bounces and rolls down the corridor; laughter = children playing somewhere out of sight; giggle = a child giggles nearby, unseen; running = small feet run past behind you; chalk = chalk scratching on a board; chair = a chair dragged across the floor; papers = sheets of paper shuffled; speaker = the school speaker crackles; water = dripping; bell = the school bell; echo = every step echoes far too long; silence = all sound stops.`;
 
+// The contact book is written from what the player did tonight. The facts are listed by
+// the page itself; Muse Spark only reads them.
+const REPORT_SYSTEM = `You write tonight's page of a Taiwanese contact book (聯絡簿) in "Last One Out". The student on duty walked their old school alone at night. You get only what they did: the lines they kept and erased on the chalkboards, how they answered the roll call, the locked doors they tried, where they stayed longest, their memories.
+Write three things, each in the requested language and in natural English:
+- diary: the student's own diary of tonight, first person, plain and specific, retelling what they did (what they kept, what they wiped away, the roll call). At most 70 Chinese characters or 45 English words.
+- note: the homeroom teacher's reply in red pen, reading those choices: what they held on to, what they wiped away, how they answered when their name was called. Warm and a little uncanny, as the teacher who never said their name and finally noticed them. At most 45 Chinese characters or 30 English words.
+- bring: one thing to bring tomorrow, tied to what they kept. At most 8 Chinese characters or 5 English words.
+No names, no diagnosis, no mental-health words, no blame, no death, no ghosts.
+Reply with JSON only: {"diary":"","diary_en":"","note":"","note_en":"","bring":"","bring_en":""}`;
+
+async function writeReport(school, stats) {
+  const kept = school.record.draws.map((d) => d.cards[d.picked]);
+  const erased = school.record.draws.flatMap((d) => d.cards.filter((_, i) => i !== d.picked));
+  const facts = {
+    language: school.lang === 'zh' ? 'Traditional Chinese (Taiwan)' : 'English',
+    memories: school.bible?.memories_en?.length ? school.bible.memories_en : school.memories,
+    kept: kept.map((c) => (school.lang === 'zh' ? c.title : c.title_en)),
+    erased: erased.map((c) => (school.lang === 'zh' ? c.title : c.title_en)),
+    roll_call: stats.answered ? `answered "here" after ${stats.delay} seconds${stats.calls > 1 ? ', only when called a second time' : ''}${stats.spoken ? ', out loud' : ''}` : 'did not answer',
+    locked_doors_tried: stats.locked,
+    stayed_longest: stats.longest,
+    minutes: stats.minutes,
+  };
+  const text = await chat(
+    [
+      { role: 'system', content: REPORT_SYSTEM },
+      { role: 'user', content: JSON.stringify(facts) },
+    ],
+    { effort: 'minimal', maxTokens: 2500 },
+  );
+  const r = parseJson(text) ?? {};
+  const out = {
+    diary: cleanText(r.diary, 160),
+    diary_en: cleanText(r.diary_en, 320),
+    comment: cleanText(r.note, 120),
+    comment_en: cleanText(r.note_en, 240),
+    bring: cleanText(r.bring, 16),
+    bring_en: cleanText(r.bring_en, 40),
+  };
+  return Object.fromEntries(Object.entries(out).filter(([, v]) => v));
+}
+
 const COMMENT_SYSTEM = `Write one short teacher's note for a student's contact book. The student went back to their old school, alone, at night, and saw the changes listed below. The memories are theirs.
 Write as the teacher who never said their name and finally noticed them: warm, a little uncanny, kind about whatever was hard back then. At most 30 words. No names, no death, no ghosts, no danger.
 Reply with JSON only: {"note":"the note in the requested language","note_en":"the same note in natural English"}`;
 
-const SOFTEN_SYSTEM = `This photo-edit instruction for a quiet horror game set in an empty Taiwanese school at night was refused by the image model's content policy.
-Rewrite it so it keeps the same unsettling idea but cannot be refused: no people of any age, no children, no students, no bodies, no faces; show absence through objects, shadows, light and space instead. Keep it one precise instruction describing only what changes. Reply with the new instruction only.`;
 
 const TRADITIONAL_SYSTEM =
   'Rewrite this transcribed sentence in Traditional Chinese characters as written in Taiwan, with natural punctuation. Change nothing else. Reply with the sentence only.';
 
 const editPrompt = (change) =>
-  `${change} ${KEEP} If people appear, show them only from behind, far away or blurred by motion; never show a face.`;
+  `${change} ${KEEP} Do not add any people or figures unless this instruction asks for one; never show a face.`;
 
 // ---------- helpers ----------
 
@@ -466,14 +502,14 @@ function parseJson(text) {
 
 const SOUNDS = new Set(['none', 'silence', 'echo', 'bell', 'ball', 'laughter', 'chalk', 'chair', 'papers', 'speaker', 'water', 'giggle', 'running']);
 
-function parseDeal(text, ids) {
+function parseDeal(text, ids, count = 3) {
   const cards = parseJson(text)?.cards;
   const editsOf = (c) => Object.fromEntries(ids.map((id) => [id, cleanText(c?.edits?.[id], 500)]));
   const usable = (c) => c?.title && Object.values(editsOf(c)).some(Boolean);
-  if (!Array.isArray(cards) || cards.length < 3 || !cards.slice(0, 3).every(usable)) {
+  if (!Array.isArray(cards) || cards.length < count || !cards.slice(0, count).every(usable)) {
     throw new HttpError(502, 'The chalk lines came back garbled. Try again.');
   }
-  return cards.slice(0, 3).map((c) => ({
+  return cards.slice(0, count).map((c) => ({
     title: cleanText(c.title, 60),
     whisper: cleanText(c.whisper, 160),
     title_en: cleanText(c.title_en, 80) || cleanText(c.title, 60),
@@ -543,21 +579,25 @@ async function firstAcceptedEdit(photoId, prompts) {
 
 // Tries the edits at the same time and keeps the most preferred one that was accepted:
 // a refusal takes as long as a success, so trying them one by one doubles the wait.
+// All wordings at once; the most preferred one that was accepted, as soon as everything
+// preferred over it has been refused (it does not wait for the slower, lesser ones).
 async function preferredEdit(photoId, prompts) {
   const { bytes } = await readPhoto(photoId);
-  const results = await Promise.all(
-    prompts.map((prompt) =>
-      editImage(bytes, prompt).then(
-        (out) => ({ out }),
-        (err) => {
-          if (!refused(err)) throw err;
-          return null;
-        },
-      ),
+  const tries = prompts.map((prompt) =>
+    editImage(bytes, prompt).then(
+      (out) => out,
+      (err) => {
+        if (!refused(err)) throw err;
+        return null;
+      },
     ),
   );
-  const first = results.find(Boolean);
-  return first ? savePhoto(first.out) : null;
+  tries.forEach((t) => t.catch(() => {}));
+  for (const [i, attempt] of tries.entries()) {
+    const out = await attempt.catch((err) => (i === tries.length - 1 ? Promise.reject(err) : null));
+    if (out) return savePhoto(out);
+  }
+  return null;
 }
 
 // ---------- a remembered school ----------
@@ -619,82 +659,194 @@ function overlap(a, b) {
 // Large enough to click, and not a sliver at the edge of the frame.
 const clickable = (box) => box.w * box.h > 0.004 && box.w > 0.02;
 
-async function sceneView(id, photoId) {
+// A place in two steps: quick = the photo and what SAM found in it (enough to walk in);
+// full = the same with its depth map.
+function sceneViews(id, photoId) {
+  const quick = samView(id, photoId);
+  const full = Promise.all([quick, depthMap(photoId)]).then(([view, depth]) => ({ ...view, depth }));
+  quick.catch(() => {});
+  full.catch(() => {});
+  return { quick, full };
+}
+
+const sceneView = (id, photoId) => sceneViews(id, photoId).full;
+
+async function samView(id, photoId) {
   const concepts = SCENES[id].concepts;
   const keys = Object.keys(concepts);
-  const [depth, ...found] = await Promise.all([
-    depthMap(photoId),
+  // Which doors stand open: those are never called locked.
+  const asksOpen = id === 'corridor' || id === 'door';
+  const [open, ...found] = await Promise.all([
+    asksOpen ? findObjectsSafely(photoId, 'open door', id) : [],
     ...keys.map((key) => findObjectsSafely(photoId, concepts[key], id)),
   ]);
-  const view = { id, photo: `/photos/${photoId}`, depth };
+  const view = { id, photo: `/photos/${photoId}`, depth: null };
   keys.forEach((key, i) => {
-    if (key === 'doors') view.doors = found[i].filter(clickable).slice(0, 5);
+    if (key === 'doors') view.doors = found[i].filter(clickable).slice(0, 5).map((d) => (open.some((o) => overlap(o, d) > 0.5) ? { ...d, open: true } : d));
     // Papers lie on desks: in the lower part of the photo and wider than tall.
     else if (key === 'papers') view.papers = found[i].filter((b) => b.y + b.h / 2 > 0.45 && b.w > b.h * 0.8).slice(0, 3);
     else view[key] = found[i][0] ?? null;
   });
-  // SAM can call the cork board a chalkboard too; the chalkboard is the one that is not it.
+  // SAM can call the cork board a chalkboard, or the chalkboard a bulletin board. The
+  // chalkboard matters most (the choice is written on it): keep one, and the notice is
+  // only a board that is not it. The page then checks which is dark and which is light.
   const boards = found[keys.indexOf('board')] ?? [];
-  if (view.notice && boards.length) view.board = boards.find((b) => overlap(b, view.notice) < 0.3) ?? null;
+  const notices = keys.includes('notice') ? found[keys.indexOf('notice')] ?? [] : [];
+  if (keys.includes('notice')) {
+    view.board = boards.find((b) => notices.every((n) => overlap(b, n) < 0.3)) ?? boards[0] ?? null;
+    view.notice = notices.find((n) => !view.board || overlap(n, view.board) < 0.3) ?? null;
+  }
   return view;
 }
 
-async function firstWalk(school) {
-  const ids = LOOPS[0];
-  const photoIds = await Promise.all(ids.map((id) => takePhoto(id, school)));
-  ids.forEach((id, i) => (school.photos[id] = photoIds[i]));
-  school.first = { ...school.photos };
-  const scenes = await Promise.all(ids.map((id, i) => sceneView(id, photoIds[i])));
-  for (const view of scenes) school.views[view.id] = view;
-  return { index: 0, scenes, flicker: null, scare: null };
+// The first photo has to be fast: one quick sentence from Muse Spark turns the memories
+// into corridor details, and two corridor photos race; the first one back is used.
+const FIRST_LINES_SYSTEM = `You help photograph a remembered Taiwanese school at night. For each place (the corridor; the classroom door seen from the corridor; the classroom inside), write ONE English sentence of at most 40 words naming concrete objects or features there that echo the player's memories and the year. Spread the memories across the places. Objects and places only: no people, no children, no faces, no readable text, no politics, religion, flags or blood. If a memory is about a person, show a trace of them instead (a bag, shoes, a chair, a sheet of paper).
+Reply with JSON only: {"corridor":"","door":"","classroom":""}`;
+
+// One quick call for the first three photos; the full memory bible comes later.
+async function firstLines(school) {
+  if (MOCK) return {};
+  try {
+    const text = await chat(
+      [
+        { role: 'system', content: FIRST_LINES_SYSTEM },
+        { role: 'user', content: JSON.stringify({ year: school.year, memories: school.memories }) },
+      ],
+      { effort: 'minimal', maxTokens: 2000 },
+    );
+    const lines = parseJson(text) ?? {};
+    return Object.fromEntries(['corridor', 'door', 'classroom'].map((id) => [id, cleanText(lines[id], 300)]));
+  } catch (err) {
+    if (err.status === 402) throw err;
+    console.error(`[first lines] ${err.message}`);
+    return {};
+  }
 }
 
-// When the image model refuses an edit, Muse Spark rewrites it without people and
-// without anything else likely to be refused, keeping the same eerie idea.
-async function softenEdit(edit) {
-  const text = await chat(
-    [
-      { role: 'system', content: SOFTEN_SYSTEM },
-      { role: 'user', content: edit },
-    ],
-    { effort: 'low', maxTokens: 3000 },
+async function firstPhoto(id, school, line) {
+  if (MOCK) return takePhoto(id, school);
+  const prompt = [HOUSE_STYLE, `The school as it was around ${school.year}.`, SCENES[id].base, line].filter(Boolean).join(' ');
+  const one = async () => {
+    try {
+      return await savePhoto(await generateImage(prompt));
+    } catch (err) {
+      if (!refused(err)) throw err;
+      return savePhoto(await generateImage([HOUSE_STYLE, SCENES[id].base].join(' ')));
+    }
+  };
+  return Promise.any(id === 'corridor' ? [one(), one()] : [one()]).catch((err) => {
+    throw err.errors?.[0] ?? err;
+  });
+}
+
+// The corridor is ready first and the walk starts there. The door and the classroom
+// (which need the memory bible) and every depth map and door are finished behind you.
+const since = (school) => ((Date.now() - school.started) / 1000).toFixed(1);
+
+function startFirstWalk(school, patience = 0) {
+  const started = Date.now();
+  school.started = started;
+  const log = (what) => console.error(`[time] ${what} ${((Date.now() - started) / 1000).toFixed(1)}s`);
+  const bible = memoryBible(school).then((b) => {
+    school.bible = b;
+    log('bible');
+    return b;
+  });
+  const lines = firstLines(school).then((l) => {
+    log('first lines');
+    return l;
+  });
+  // The corridor with your memories in it, if it is ready by the time the page has
+  // finished remembering; otherwise a plain corridor started at once, whichever is first.
+  const remembered = lines.then((l) => firstPhoto('corridor', school, l.corridor)).then((id) => {
+    log('photo corridor (remembered)');
+    return id;
+  });
+  const plain = MOCK
+    ? remembered
+    : generateImage([HOUSE_STYLE, `The school as it was around ${school.year}.`, SCENES.corridor.base].join(' '))
+        .then(savePhoto)
+        .then((id) => {
+          log('photo corridor (plain)');
+          return id;
+        });
+  remembered.catch(() => {});
+  plain.catch(() => {});
+  const late = new Promise((resolve) => setTimeout(resolve, Math.max(0, patience - 1500)));
+  const corridorPhoto = Promise.race([remembered, late.then(() => Promise.any([remembered, plain]))]).catch((err) => {
+    throw err.errors?.[0] ?? err;
+  });
+  const photos = {
+    corridor: corridorPhoto,
+    door: lines.then((l) => firstPhoto('door', school, l.door)).finally(() => log('photo door')),
+    classroom: lines.then((l) => firstPhoto('classroom', school, l.classroom)).finally(() => log('photo classroom')),
+  };
+  const views = Object.fromEntries(
+    Object.entries(photos).map(([id, photo]) => {
+      const both = photo.then((photoId) => sceneViews(id, photoId));
+      return [id, { quick: both.then((v) => v.quick), full: both.then((v) => v.full) }];
+    }),
   );
-  return cleanText(text, 500);
+  for (const v of Object.values(views)) {
+    v.quick.catch(() => {});
+    v.full.catch(() => {});
+  }
+  school.pendingViews = views;
+  // The next lines are dealt as soon as the bible and the photos the next walk edits
+  // exist (the corridor and the door; the next walk ends in the office, not here).
+  school.firstReady = (async () => {
+    const [corridor, door] = await Promise.all([photos.corridor, photos.door, bible]);
+    Object.assign(school.photos, { corridor, door });
+    school.first = { ...school.photos };
+    school.scare1 = quiet(teacherScare(school));
+    prepareLoop(school);
+  })();
+  photos.classroom.then((id) => {
+    school.photos.classroom ??= id;
+    school.first.classroom ??= id;
+  }, () => {});
+  school.firstReady.catch((err) => console.error(`[first] ${err.message}`));
+  school.firstWalk = school.firstReady
+    .then(() => Promise.all(LOOPS[0].map((id) => views[id].full)))
+    .then((scenes) => {
+      log('first walk ready');
+      for (const view of scenes) school.views[view.id] = view;
+      const walk = { index: 0, scenes, flicker: null, scare: null };
+      school.record.walks.unshift(walk);
+      return walk;
+    });
+  school.firstWalk.catch(() => {});
+  return corridorPhoto;
 }
 
-// Edits one scene's photo: refused -> rewritten and retried; not visible -> pushed once
-// more; still refused -> null, and the photo stays as it was.
+// Edits one scene's photo. The edit, a plainer fallback (the traces alone) and a change
+// the image model always accepts are sent at the same time, so a refusal never adds a
+// wait: the first that came back in that order of preference is used.
+const ALWAYS_ACCEPTED =
+  'Make it later at night: every fluorescent tube a little dimmer, one tube near the far end flickering off, the wet floor reflecting more of the light.';
+
 async function editScene(id, previous, instruction, fallback) {
   const { bytes } = await readPhoto(previous);
-  let used = instruction;
-  let photoId;
-  try {
-    photoId = await savePhoto(await editImage(bytes, editPrompt(used)));
-  } catch (err) {
-    if (!refused(err)) throw err;
-    try {
-      used = (await softenEdit(instruction)) || instruction.split(/(?<=\.)\s/)[0];
-      console.error(`[edit] ${id}: refused, retrying a rewritten edit`);
-      photoId = await savePhoto(await editImage(bytes, editPrompt(used)));
-    } catch (again) {
-      if (again.status === 402) throw again;
-      if (fallback && fallback !== instruction) {
-        console.error(`[edit] ${id}: refused twice, trying only the shirts`);
-        return firstAcceptedEdit(previous, [editPrompt(fallback)]);
-      }
-      console.error(`[edit] ${id}: refused twice, keeping the previous photo`);
-      return null;
+  const attempt = (text) =>
+    editImage(bytes, editPrompt(text)).then(
+      (out) => out,
+      (err) => {
+        if (!refused(err)) throw err;
+        return null;
+      },
+    );
+  const tries = [instruction, fallback && fallback !== instruction ? fallback : null, ALWAYS_ACCEPTED].map((text) => (text ? attempt(text) : Promise.resolve(null)));
+  tries.forEach((p) => p.catch(() => {}));
+  for (const [i, result] of tries.entries()) {
+    const out = await result.catch((err) => (i === 0 ? Promise.reject(err) : null));
+    if (out) {
+      if (i > 0) console.error(`[edit] ${id}: refused, using ${i === 1 ? 'the traces alone' : 'a darker night'}`);
+      return savePhoto(out);
     }
   }
-  if (CHECK_EDITS && !(await photoShows(photoId, used))) {
-    try {
-      photoId = await savePhoto(await editImage(bytes, editPrompt(`Make this change clearly visible: ${used}`)));
-    } catch (err) {
-      if (err.status === 402) throw err;
-      console.error(`[edit] ${id}: retry failed, keeping the first edit`);
-    }
-  }
-  return photoId;
+  console.error(`[edit] ${id}: every edit refused, keeping the previous photo`);
+  return null;
 }
 
 // ---------- the memory bible ----------
@@ -766,7 +918,41 @@ const publicBible = (school) => ({
 
 // ---------- the next walk, prepared while you walk this one ----------
 
-async function dealCards(school, loop) {
+// The three lines first, fast, so they are on the board before you get there. Each one
+// grows out of a different memory and names it.
+const TITLES_SYSTEM = `You write the three half-erased lines of chalk on the board in "Last One Out", a quiet horror walk through a remembered Taiwanese school at night. The player keeps one line, and it decides how the school has changed on the next walk.
+Each line grows out of a DIFFERENT one of the player's memories and names it in the player's own words (the tree, the teacher, the ranking...), saying how it has changed tonight. Use the memory threads for this walk. Never repeat an earlier change.
+At most 8 Chinese characters or 6 English words each. Plain, quiet and eerie. No faces, no death, no blood, no ghosts.
+Reply with JSON only: {"lines":[{"title":"in the player's language","title_en":"in natural English"},{...},{...}]}`;
+
+async function quickTitles(school, loop) {
+  if (MOCK) return null;
+  try {
+    const text = await chat(
+      [
+        { role: 'system', content: TITLES_SYSTEM },
+        {
+          role: 'user',
+          content: JSON.stringify({
+            language: school.lang === 'zh' ? 'Traditional Chinese (Taiwan)' : 'English',
+            memories: school.memories,
+            threads: (school.bible?.threads ?? []).map((th) => ({ memory: th.motif, tonight: loop === 1 ? th.walk2 : th.walk3 })),
+            earlier: school.changes.map((c) => c.title),
+          }),
+        },
+      ],
+      { effort: 'minimal', maxTokens: 1500 },
+    );
+    const lines = (parseJson(text)?.lines ?? []).map((l) => ({ title: cleanText(l?.title, 30), title_en: cleanText(l?.title_en, 60) })).filter((l) => l.title);
+    return lines.length >= 3 ? lines.slice(0, 3) : null;
+  } catch (err) {
+    if (err.status === 402) throw err;
+    console.error(`[titles] ${err.message}`);
+    return null;
+  }
+}
+
+async function dealCards(school, loop, titles = null) {
   if (MOCK) return MOCK_DEALS[(loop - 1) % MOCK_DEALS.length];
   const ids = LOOPS[loop];
   const shown = [...new Set(ids)].filter((id) => school.photos[id]);
@@ -779,6 +965,7 @@ async function dealCards(school, loop) {
     memories: school.memories,
     bible: { era: school.bible.era, threads: school.bible.threads, teacher: school.bible.teacher },
     previous: school.changes.map((c) => c.title_en || c.title),
+    ...(titles ? { titles: titles.map((t) => t.title) } : {}),
   });
   const images = await Promise.all(
     shown.map(async (id) => [
@@ -794,12 +981,31 @@ async function dealCards(school, loop) {
       ],
       { effort: 'low', maxTokens: 8000 },
     );
+  // The lines already on the board stay exactly as written.
+  const keep = (cards) => (titles ? cards.map((c, i) => ({ ...c, ...titles[i] })) : cards);
+  if (titles) {
+    // Each line's changes are written by its own call, all three at once: much faster.
+    const one = (line) =>
+      chat(
+        [
+          { role: 'system', content: `${CARDS_SYSTEM}\nThis time write exactly ONE card, for the line given as "title" (use it exactly), and reply {"cards":[that card]}.` },
+          { role: 'user', content: [{ type: 'text', text: brief.replace(/,"titles":\[[^\]]*\]/, '').replace(/}$/, `,"title":${JSON.stringify(line.title)}}`) }, ...images.flat()] },
+        ],
+        { effort: 'low', maxTokens: 4000 },
+      ).then((text) => parseDeal(text, ids, 1)[0]);
+    try {
+      return keep(await Promise.all(titles.map(one)));
+    } catch (err) {
+      if (err.status === 402) throw err;
+      console.error(`[deal] one card at a time failed (${err.message}); dealing all three together`);
+    }
+  }
   try {
-    return parseDeal(await ask(true), ids);
+    return keep(parseDeal(await ask(true), ids));
   } catch (err) {
     if (err.status === 402) throw err;
     console.error(`[deal] ${err.message}; dealing again without the photos`);
-    return parseDeal(await ask(false), ids);
+    return keep(parseDeal(await ask(false), ids));
   }
 }
 
@@ -822,7 +1028,7 @@ async function flickerFrame(corridorId, loop) {
 async function teacherScare(school) {
   if (MOCK) return `/photos/${await savePhoto(mockPhoto('corridor', { walk: 1, changes: [], note: 'scare: the faceless teacher' }))}`;
   try {
-    const id = await firstAcceptedEdit(school.first.corridor, [SCARE_TEACHER(school.bible.teacher), SCARE_TEACHER()]);
+    const id = await preferredEdit(school.first.corridor, [...TEACHER_MASKS.map((mask) => SCARE_TEACHER(undefined, mask)), SCARE_TEACHER(school.bible.teacher, false)]);
     return id && `/photos/${id}`;
   } catch (err) {
     if (err.status === 402) throw err;
@@ -833,92 +1039,126 @@ async function teacherScare(school) {
 
 // The second scare. The classroom you walk into is full, backs to you; at roll call
 // every head turns. If the crowd is refused, the lights go out instead.
-async function crowdFrames(classroomId) {
-  if (MOCK) {
-    const [seated, turned] = await Promise.all(
-      ['crowd: a class with its back to you', 'scare: every head turns to you'].map((note) => savePhoto(mockPhoto('classroom', { walk: 2, changes: [], note }))),
-    );
-    return { seated: `/photos/${seated}`, turned: `/photos/${turned}` };
-  }
+// The full class, seen from behind: the room you walk into on the last walk.
+async function crowdSeated(classroomId) {
+  if (MOCK) return `/photos/${await savePhoto(mockPhoto('classroom', { walk: 2, changes: [], note: 'crowd: a class with its back to you' }))}`;
   try {
     const seated = await firstAcceptedEdit(classroomId, [CROWD_SEATED]);
-    const turned = seated && (await preferredEdit(seated, CROWD_TURNED));
-    if (seated && turned) return { seated: `/photos/${seated}`, turned: `/photos/${turned}` };
-    const dark = await firstAcceptedEdit(classroomId, LIGHTS_OUT);
-    return { seated: null, turned: dark && `/photos/${dark}` };
+    return seated ? `/photos/${seated}` : null;
   } catch (err) {
     if (err.status === 402) throw err;
     console.error(`[scare] crowd: ${err.message}`);
-    return { seated: null, turned: null };
+    return null;
+  }
+}
+
+// The moment they all turn; without a seated class, the lights go out instead.
+async function crowdTurned(classroomId, seated) {
+  if (MOCK) return { kind: seated ? 'turn' : 'dark', photo: `/photos/${await savePhoto(mockPhoto('classroom', { walk: 2, changes: [], note: 'scare: every head turns to you' }))}` };
+  try {
+    const turned = seated && (await preferredEdit(seated.slice('/photos/'.length), CROWD_TURNED));
+    if (turned) return { kind: 'turn', photo: `/photos/${turned}` };
+    const dark = await firstAcceptedEdit(classroomId, LIGHTS_OUT);
+    return dark ? { kind: 'dark', photo: `/photos/${dark}` } : null;
+  } catch (err) {
+    if (err.status === 402) throw err;
+    console.error(`[scare] turn: ${err.message}`);
+    return null;
   }
 }
 
 // Renders one chalk line's version of the next walk, photos, doors and scares included.
 // Scare and flicker frames start as soon as their photo exists, alongside depth and SAM.
-async function renderOption(school, loop, card) {
+// One chalk line's version of the next walk, in stages: the corridor's photo and doors
+// come first (that is all you need to start walking); the other places, depth maps and
+// scares follow while you walk.
+function renderOption(school, loop, card) {
   const ids = LOOPS[loop];
   const changes = [...school.changes, card];
   const last = loop === LOOPS.length - 1;
-  const photoIds = {};
-  const views = {};
-  let flicker = Promise.resolve(null);
-  let scare = loop === 1 ? school.scare1 : Promise.resolve(null);
-  await Promise.all(
-    ids.map(async (id) => {
-      const previous = school.photos[id];
-      let photoId = previous;
-      if (MOCK) photoId = await savePhoto(mockPhoto(id, { walk: loop, changes }));
-      else if (!previous) photoId = await takePhoto(id, school, [card.edits[id], TRACES[loop]?.[id]].filter(Boolean).join(' ')); // first time in this room
-      else {
+  const photos = Object.fromEntries(
+    ids.map((id) => [
+      id,
+      (async () => {
+        const previous = school.photos[id];
+        if (MOCK) return savePhoto(mockPhoto(id, { walk: loop, changes }));
+        if (!previous) return takePhoto(id, school, [card.edits[id], TRACES[loop]?.[id]].filter(Boolean).join(' ')); // first time in this room
         const instruction = [card.edits[id], TRACES[loop]?.[id], last && id === 'classroom' ? FINAL_CLASSROOM : ''].filter(Boolean).join(' ');
         const fallback = [TRACES[loop]?.[id], last && id === 'classroom' ? FINAL_CLASSROOM.replace(/^Also /, '') : ''].filter(Boolean).join(' ');
-        if (instruction) photoId = (await editScene(id, previous, instruction, fallback)) ?? previous;
-      }
-      photoIds[id] = photoId;
-      if (id === 'corridor') flicker = quiet(flickerFrame(photoId, loop));
-      if (id === 'classroom' && last) scare = quiet(crowdFrames(photoId));
-      views[id] = photoId === previous && school.views[id] ? school.views[id] : await sceneView(id, photoId);
+        return instruction ? ((await editScene(id, previous, instruction, fallback)) ?? previous) : previous;
+      })(),
+    ]),
+  );
+  const same = (id, photoId) => photoId === school.photos[id] && school.views[id];
+  const views = Object.fromEntries(
+    ids.map((id) => {
+      const both = photos[id].then((photoId) => (same(id, photoId) ? { quick: same(id, photoId), full: same(id, photoId) } : sceneViews(id, photoId)));
+      return [id, { quick: both.then((v) => v.quick), full: both.then((v) => v.full) }];
     }),
   );
-  const [figure, frames] = await Promise.all([flicker, scare]);
-  const scenes = ids.map((id) => views[id]);
-  let frame = null;
-  if (loop === 1 && frames) frame = { after: 'door', kind: 'teacher', photo: frames };
-  if (last && frames?.turned) {
-    frame = { after: 'classroom', kind: frames.seated ? 'turn' : 'dark', photo: frames.turned };
-    if (frames.seated) {
-      // You walk into the full room; once they have turned, it is empty again.
-      const i = ids.indexOf('classroom');
-      scenes[i] = { ...scenes[i], photo: frames.seated, after: scenes[i].photo };
-    }
+  // The corridor without its depth map yet: enough to walk into.
+  photos.corridor.then(() => console.error(`[time] walk ${loop + 1} "${card.title}": corridor photo at ${since(school)}s`), () => {});
+  const corridor = photos.corridor.then(async (photoId) => {
+    if (same('corridor', photoId)) return school.views.corridor;
+    const [doors, open] = await Promise.all([findObjectsSafely(photoId, SCENES.corridor.concepts.doors, 'corridor'), findObjectsSafely(photoId, 'open door', 'corridor')]);
+    const marked = doors.filter(clickable).slice(0, 5).map((d) => (open.some((o) => overlap(o, d) > 0.5) ? { ...d, open: true } : d));
+    return { id: 'corridor', photo: `/photos/${photoId}`, depth: null, doors: marked };
+  });
+  const flicker = quiet(photos.corridor.then((photoId) => flickerFrame(photoId, loop)));
+  let scare = Promise.resolve(null);
+  if (loop === 1) scare = Promise.resolve(school.scare1).then((photo) => (photo ? { after: 'door', kind: 'teacher', photo } : null));
+  if (last) {
+    // You walk into the full room; once they have turned, it is empty again.
+    const seated = quiet(photos.classroom.then((photoId) => crowdSeated(photoId)));
+    const full = (room) => Promise.all([room, seated]).then(([view, crowd]) => (crowd ? { ...view, photo: crowd, after: view.photo } : view));
+    views.classroom = { quick: full(views.classroom.quick), full: full(views.classroom.full) };
+    scare = quiet(Promise.all([photos.classroom, seated]).then(([photoId, crowd]) => crowdTurned(photoId, crowd))).then((t) => (t ? { after: 'classroom', ...t } : null));
   }
-  return {
+  scare = scare.catch(() => null);
+  const figure = flicker.then((photo) => (photo ? { scene: 'corridor', photo } : null)).catch(() => null);
+  const extras = Promise.all([figure, scare]).then(([f, frame]) => ({ flicker: f, scare: frame }));
+  const photoIds = Promise.all(ids.map((id) => photos[id])).then((list) => Object.fromEntries(ids.map((id, i) => [id, list[i]])));
+  const done = Promise.all([photoIds, Promise.all(ids.map((id) => views[id].full)), extras]).then(([ids2, scenes, more]) => ({
     card,
-    photoIds,
-    walk: {
-      index: loop,
-      scenes,
-      flicker: figure ? { scene: 'corridor', photo: figure } : null,
-      scare: frame,
-    },
-  };
+    photoIds: ids2,
+    walk: { index: loop, scenes, ...more },
+  }));
+  for (const p of [corridor, photoIds, done, extras, ...Object.values(views).flatMap((v) => [v.quick, v.full])]) p.catch(() => {});
+  return { card, loop, corridor, views, extras, figure, scare, photoIds, done };
 }
 
 // Starts dealing and rendering all three lines of the next walk in the background.
 function prepareLoop(school) {
   const loop = school.changes.length + 1;
-  const cards = quiet(dealCards(school, loop));
+  console.error(`[time] walk ${loop + 1}: dealing at ${since(school)}s`);
+  const titles = quiet(quickTitles(school, loop).finally(() => console.error(`[time] walk ${loop + 1}: lines at ${since(school)}s`)));
+  const cards = quiet(titles.catch(() => null).then((lines) => dealCards(school, loop, lines)).finally(() => console.error(`[time] walk ${loop + 1}: dealt at ${since(school)}s`)));
   const contexts = [0, 1, 2].map(() => ({ cancelled: false }));
   const options = [0, 1, 2].map((i) => quiet(cards.then((dealt) => job.run(contexts[i], () => renderOption(school, loop, dealt[i])))));
-  school.next = { loop, cards, options, contexts };
+  school.next = { loop, titles, cards, options, contexts };
   return school.next;
 }
 
+// Once the kept version's photos exist, they are the school: the next lines are dealt
+// from them straight away. Its doors, depth maps and scares are recorded when done.
 function commit(school, option) {
-  school.changes.push(option.card);
-  Object.assign(school.photos, option.photoIds);
-  for (const view of option.walk.scenes) school.views[view.id] = view;
-  return option.walk;
+  school.committing = option.photoIds.then((photoIds) => {
+    school.changes.push(option.card);
+    Object.assign(school.photos, photoIds);
+    if (school.changes.length >= DRAWS) school.ending = quiet(prepareEnding(school));
+    else prepareLoop(school);
+  });
+  school.committing.catch((err) => console.error(`[commit] ${err.message}`));
+  option.done.then(
+    (full) => {
+      for (const view of full.walk.scenes) school.views[view.id] = view;
+      school.record.walks.push(full.walk);
+    },
+    (err) => console.error(`[walk] ${err.message}`),
+  );
+  school.walkDone = option.done.catch(() => null);
+  school.pendingViews = option.views;
+  school.pendingExtras = { flicker: option.figure, scare: option.scare };
 }
 
 // The teacher's note, in the player's language and in English. Never left blank.
@@ -948,15 +1188,16 @@ async function teacherComment(school) {
 }
 
 // The ending is prepared during the last walk: the classroom in daylight and the note.
+// The afternoon after: the teacher watching from the door, and the same room once the
+// credits have rolled and nobody is there.
 async function prepareEnding(school) {
-  const [daylightId, comment] = await Promise.all([
-    MOCK
-      ? savePhoto(mockPhoto('classroom', { walk: school.changes.length, changes: school.changes, daylight: true }))
-      : readPhoto(school.photos.classroom).then(({ bytes }) => editImage(bytes, DAYLIGHT_EDIT)).then(savePhoto),
-    teacherComment(school),
-  ]);
+  const mock = () => savePhoto(mockPhoto('classroom', { walk: school.changes.length, changes: school.changes, daylight: true }));
+  const empty = MOCK ? mock() : readPhoto(school.photos.classroom).then(({ bytes }) => editImage(bytes, DAYLIGHT_EDIT)).then(savePhoto);
+  const watched = MOCK ? mock() : preferredEdit(school.photos.classroom, DAYLIGHT_PEEK(school.bible.teacher).slice(0, -1));
+  const [watchedId, emptyId, comment] = await Promise.all([watched.catch(() => null), empty, teacherComment(school)]);
   return {
-    daylight: `/photos/${daylightId}`,
+    daylight: `/photos/${watchedId ?? emptyId}`,
+    daylightEmpty: `/photos/${emptyId}`,
     first: `/photos/${school.first.corridor}`,
     last: `/photos/${school.photos.corridor}`,
     year: school.year,
@@ -1042,13 +1283,54 @@ const routes = {
     schools.set(school.id, school);
     if (schools.size > 200) schools.delete(schools.keys().next().value);
     return exclusive(school, async () => {
-      school.bible = await memoryBible(school);
-      const walk = await firstWalk(school);
-      school.record.walks.push(walk);
-      school.scare1 = quiet(teacherScare(school));
-      prepareLoop(school);
-      return { schoolId: school.id, lang: school.lang, draws: DRAWS, bible: publicBible(school), walk };
+      const patience = Math.min(30000, Math.max(0, Number(body.patience) || 0));
+      const corridor = await startFirstWalk(school, patience);
+      // Only the corridor's photo so far; the page asks for the rest with /api/scene.
+      const scenes = LOOPS[0].map((id) => ({ id, pending: true }));
+      Object.assign(scenes[0], { photo: `/photos/${corridor}`, depth: null, doors: [] });
+      return { schoolId: school.id, lang: school.lang, draws: DRAWS, bible: { year: school.year }, walk: { index: 0, scenes, flicker: null, scare: null } };
     });
+  },
+
+  // Tonight's contact book, from what the player did. Numbers and place names only: the
+  // player's name is not part of it. Without a model the page writes it from the facts.
+  'POST /api/report': async (body) => {
+    const school = getSchool(body.schoolId);
+    const raw = body.stats ?? {};
+    const num = (v, max) => Math.min(max, Math.max(0, Math.round(Number(v) || 0)));
+    const stats = {
+      answered: Boolean(raw.answered),
+      delay: num(raw.delay, 60),
+      calls: num(raw.calls, 3),
+      spoken: Boolean(raw.spoken),
+      locked: num(raw.locked, 50),
+      longest: ['corridor', 'door', 'classroom', 'office'].includes(raw.longest) ? raw.longest : 'corridor',
+      minutes: num(raw.minutes, 60),
+    };
+    if (MOCK) return {};
+    try {
+      return await writeReport(school, stats);
+    } catch (err) {
+      if (err.status === 402) throw err;
+      console.error(`[report] ${err.message}`);
+      return {};
+    }
+  },
+
+  // One place of the first walk, once its depth map and doors are found.
+  'POST /api/scene': async (body) => {
+    const school = getSchool(body.schoolId);
+    const pending = school.pendingViews?.[body.id];
+    if (!pending) throw new HttpError(404, 'No such place.');
+    const view = await (body.full ? pending.full : pending.quick);
+    return { view, bible: school.bible ? publicBible(school) : null };
+  },
+
+  // The scares and the flickering figure of the walk you are on, once they are ready.
+  'POST /api/extras': async (body) => {
+    const school = getSchool(body.schoolId);
+    const want = body.want === 'flicker' ? 'flicker' : 'scare';
+    return { [want]: (await school.pendingExtras?.[want]) ?? null };
   },
 
   // Keeping a chalk line. Its walk was rendered in the background; this waits for it.
@@ -1058,6 +1340,8 @@ const routes = {
     if (![0, 1, 2].includes(index)) throw new HttpError(400, 'Keep one of the three lines.');
     if (school.changes.length >= DRAWS) throw new HttpError(409, 'No lines left. Walk on.');
     return exclusive(school, async () => {
+      await school.firstReady;
+      await school.committing;
       let next = school.next ?? prepareLoop(school);
       next.contexts.forEach((context, i) => (context.cancelled = i !== index)); // only the kept line is still needed
       let cards = await next.cards.catch(() => null);
@@ -1066,24 +1350,49 @@ const routes = {
         next.contexts.forEach((context, i) => (context.cancelled = i !== index));
         cards = await next.cards;
       }
-      const option = await next.options[index].catch((err) => {
-        if (err.status === 402) throw err;
-        console.error(`[draw] ${err.message}; rendering the line again`);
-        return renderOption(school, next.loop, cards[index]);
-      });
+      let option = await next.options[index].catch(() => null);
+      let corridor = option && (await option.corridor.catch((err) => (err.status === 402 ? Promise.reject(err) : null)));
+      if (!corridor) {
+        console.error('[draw] the kept line failed; rendering it again');
+        option = renderOption(school, next.loop, cards[index]);
+        corridor = await option.corridor;
+      }
       school.next = null;
-      const walk = commit(school, option);
+      commit(school, option);
       school.record.draws.push({ cards, picked: index });
-      school.record.walks.push(walk);
-      const last = school.changes.length >= DRAWS;
-      if (last) school.ending = quiet(prepareEnding(school));
-      else prepareLoop(school);
-      return { cards, picked: index, walk, last };
+      const last = next.loop >= DRAWS;
+      const ids = LOOPS[next.loop];
+      const scenes = ids.map((id) => (id === 'corridor' ? { ...corridor, refine: true } : { id, pending: true }));
+      return { cards, picked: index, walk: { index: next.loop, scenes, flicker: null, scare: null, pending: true }, last };
     });
+  },
+
+  // The three lines on the board, as soon as they are dealt (the board shows them half
+  // wiped). Null when they are not ready yet; the page then writes ordinary notices.
+  'POST /api/lines': async (body) => {
+    const school = getSchool(body.schoolId);
+    const wait = (ms) => new Promise((resolve) => setTimeout(() => resolve(null), ms));
+    await Promise.race([Promise.all([school.firstReady, school.committing]).catch(() => null), wait(8000)]);
+    const next = school.next;
+    if (!next) return { lines: null };
+    const early = await Promise.race([next.titles.catch(() => null), wait(8000)]);
+    if (early) return { lines: early };
+    const cards = await Promise.race([next.cards.catch(() => null), wait(8000)]);
+    return { lines: cards ? cards.map((c) => ({ title: c.title, title_en: c.title_en })) : null };
+  },
+
+  // An erased line can no longer be kept, so its version of the school stops rendering.
+  'POST /api/erase': async (body) => {
+    const school = getSchool(body.schoolId);
+    const index = Number(body.index);
+    const context = school.next?.contexts?.[index];
+    if (context) context.cancelled = true;
+    return { ok: Boolean(context) };
   },
 
   'POST /api/ending': async (body) => {
     const school = getSchool(body.schoolId);
+    await school.committing?.catch(() => null);
     if (school.changes.length < DRAWS || !school.ending) throw new HttpError(409, 'Not yet.');
     return exclusive(school, async () => {
       const ending = await school.ending.catch((err) => {
@@ -1093,7 +1402,10 @@ const routes = {
       });
       if (!school.saved) {
         school.saved = true;
-        await saveRun(school, ending).catch((err) => console.error(`[run] not saved: ${err.message}`));
+        // Saved behind your back: every walk recorded in full first, then the photos copied.
+        Promise.all([school.walkDone, school.firstWalk?.catch(() => null)])
+          .then(() => saveRun(school, ending))
+          .catch((err) => console.error(`[run] not saved: ${err.message}`));
       }
       return ending;
     });
@@ -1145,7 +1457,7 @@ async function saveRun(school, ending) {
     bible: publicBible(school),
     walks,
     draws: school.record.draws,
-    ending: { ...ending, daylight: await local(ending.daylight), first: await local(ending.first), last: await local(ending.last) },
+    ending: { ...ending, daylight: await local(ending.daylight), daylightEmpty: await local(ending.daylightEmpty), first: await local(ending.first), last: await local(ending.last) },
   };
   await writeFile(join(dir, 'run.json'), JSON.stringify(run, null, 2));
   console.log(`[run] saved runs/${school.id}`);

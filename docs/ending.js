@@ -19,13 +19,13 @@ const DIGITS = '〇一二三四五六七八九';
 // Every printed word on the form, in one language at a time.
 const FORM = {
   zh: {
-    name: '姓名', homework: '今天功課＋明天預習', bring: '明天應帶物品', diary: '生活札記', teacher: '師長提醒',
+    name: '姓名', homework: '今晚值日紀錄', bring: '明天應帶物品', diary: '生活札記', teacher: '師長提醒',
     checked: '老師核閱', scores: '考試成績', subject: '學習領域', score: '得分', parent: '家長簽章',
     subjects: ['國語', '數學', '社會', '自然', '英語', '健康', '體育', '音樂', '美勞', '生活'],
     then: '那時', now: '現在', seen: '閱', duties: '值日生擦黑板拖地關燈鎖門', item: '紅色水桶',
   },
   en: {
-    name: 'Name', homework: 'Homework', bring: 'Bring tomorrow', diary: 'Diary', teacher: "Teacher's note",
+    name: 'Name', homework: "Tonight's duty", bring: 'Bring tomorrow', diary: 'Diary', teacher: "Teacher's note",
     checked: 'Teacher checked', scores: 'Test scores', subject: 'Subject', score: 'Score', parent: "Parent's signature",
     subjects: ['Chinese', 'Math', 'Social studies', 'Science', 'English', 'Health', 'P.E.', 'Music', 'Art', 'Life skills'],
     then: 'Then', now: 'Now', seen: 'SEEN', duties: 'On duty: erase the board, mop the floor, lights off, lock the door.', item: 'The red bucket.',
@@ -270,13 +270,16 @@ export async function drawContactBook(canvas, book, hideName) {
   box(c, 1190, top, 250, head);
   printed(c, f.homework, 1315, top + head / 2, 21);
   box(c, 1190, top + head, 250, 450);
-  if (english) horizontal(c, f.duties, { left: 1204, top: top + head + 6, width: 222, lineHeight: 40, color: PENCIL, size: 32, maxLines: 10 });
-  else vertical(c, f.duties, { right: 1430, top: top + head + 20, cell: 46, rows: 6, cols: 4, color: PENCIL, size: 34, rand });
+  // What you did tonight, as the page recorded it.
+  const record = book.record || f.duties;
+  if (english) horizontal(c, record, { left: 1204, top: top + head + 6, width: 222, lineHeight: 30, color: PENCIL, size: 24, maxLines: 14 });
+  else vertical(c, record, { right: 1430, top: top + head + 14, cell: 30, rows: 14, cols: 7, color: PENCIL, size: 24, rand });
   box(c, 1190, top + head + 450, 250, head);
   printed(c, f.bring, 1315, top + head * 1.5 + 450, 21);
   box(c, 1190, top + head * 2 + 450, 250, bottom - (top + head * 2 + 450));
-  if (english) horizontal(c, f.item, { left: 1204, top: top + head * 2 + 460, width: 222, lineHeight: 40, color: PENCIL, size: 32, maxLines: 3 });
-  else vertical(c, f.item, { right: 1340, top: top + head * 2 + 470, cell: 48, rows: 4, cols: 1, color: PENCIL, size: 36, rand });
+  const bring = book.bring || f.item;
+  if (english) horizontal(c, bring, { left: 1204, top: top + head * 2 + 460, width: 222, lineHeight: 40, color: PENCIL, size: 32, maxLines: 3 });
+  else vertical(c, bring, { right: 1340, top: top + head * 2 + 470, cell: 48, rows: 4, cols: 2, color: PENCIL, size: 36, rand });
 
   // Diary on manuscript grid: the memories and tonight.
   box(c, 640, top, 550, head);
@@ -303,16 +306,14 @@ export async function drawContactBook(canvas, book, hideName) {
   if (english) {
     const memories = book.memories_en?.length ? book.memories_en : book.memories;
     const sentence = (t) => (t ? t[0].toUpperCase() + t.slice(1).toLowerCase() : t); // titles read as plain sentences
-    const diary = ['Today I was on duty.', ...memories.map((m) => `${m.replace(/[.。!！]$/, '')}.`), `${(book.changes_en ?? book.changes).map(sentence).join('. ')}.`].join(' ');
+    const diary = book.diary || ['Today I was on duty.', ...memories.map((m) => `${m.replace(/[.。!！]$/, '')}.`), `${(book.changes_en ?? book.changes).map(sentence).join('. ')}.`].join(' ');
     horizontal(c, diary, { left: 652, top: top + head + 6, width: 524, lineHeight: cell, color: PENCIL, size: 36, maxLines: rows });
   } else {
     const cjk = (text) => /[\u3400-\u9fff]/.test(text) && !/[A-Za-z]{2,}/.test(text);
     const changes = book.changes.filter(cjk);
-    const diary = [
-      '今天我是值日生。',
-      ...book.memories.filter(cjk).map((m) => `${m.replace(/[。.!！]$/, '')}。`),
-      changes.length ? `${changes.join('，')}。` : '',
-    ].join('');
+    const diary =
+      book.diary ||
+      ['今天我是值日生。', ...book.memories.filter(cjk).map((m) => `${m.replace(/[。.!！]$/, '')}。`), changes.length ? `${changes.join('，')}。` : ''].join('');
     vertical(c, diary, { right: 1190, top: top + head, cell, rows, cols, color: PENCIL, size: 36, rand, marks: true });
   }
 

@@ -10,7 +10,7 @@ const ARRIVE_MS = 1600;
 const REDUCED_MOTION = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const THIS_YEAR = new Date().getFullYear();
 const CLASS_SIZE = 40;
-const CREDIT_NAME = 'Jojo'; // the one person who made this
+const CREDIT_NAME = 'JO TUNG WU'; // the one person who made this
 
 const LINES = {
   en: {
@@ -26,6 +26,7 @@ const LINES = {
     hide: 'Hide my name',
     download: 'Save the contact book',
     again: 'Go back again',
+    home: 'Back to the start',
     forward: 'Walk through this door',
     locked: 'Locked.',
     lockedDoor: 'A locked door',
@@ -36,6 +37,8 @@ const LINES = {
     alt_office: "The teachers' office",
     alt_daylight: 'The classroom in afternoon light',
     eraseHint: 'Three lines on the board. Erase two. Keep one.',
+    eraseOneMore: 'One more.',
+    wontErase: 'It will not come off.',
     officeLine: 'Your paper is on the desk.',
     tag: 'In Taiwan, the student on duty is the last one out.',
     nameLabel: 'Your name',
@@ -78,6 +81,7 @@ const LINES = {
     hide: '遮住我的名字',
     download: '存下聯絡簿',
     again: '再回去一次',
+    home: '回到主畫面',
     forward: '走進這扇門',
     locked: '鎖住了。',
     lockedDoor: '鎖住的門',
@@ -88,6 +92,8 @@ const LINES = {
     alt_office: '教師辦公室',
     alt_daylight: '午後陽光裡的教室',
     eraseHint: '黑板上有三行字。擦掉兩行，留下一行。',
+    eraseOneMore: '再擦一行。',
+    wontErase: '擦不掉。',
     officeLine: '你的考卷在桌上。',
     tag: '在台灣，值日生是最後一個離開教室的人。',
     nameLabel: '你的名字',
@@ -168,6 +174,8 @@ const state = {
   answered: false,
   shownYear: null,
   pick: null, // the line kept on the chalkboard this walk: { index, promise, done, title }
+  lines: null, // the three lines on this walk's board: { texts, fixed } (fixed = the replay's kept line)
+  erased: new Set(), // lines already wiped off this walk
 };
 
 const t = (key) => LINES[state.lang][key];
@@ -383,6 +391,12 @@ async function replayApi(path, body) {
         last: replayCursor >= run.draws.length,
       };
     }
+    case '/api/lines': {
+      const draw = run.draws[replayCursor];
+      return { lines: draw ? draw.cards.map((c) => ({ title: c.title, title_en: c.title_en })) : null, fixed: draw?.picked ?? null };
+    }
+    case '/api/erase':
+      return { ok: true };
     case '/api/ending':
       await pause(1200);
       return run.ending;
@@ -486,10 +500,18 @@ const isChoiceScene = (scene) =>
 const isEndingScene = (scene) => scene.id === 'classroom' && state.last;
 
 // Only one door opens. In the second walk it is a different one, further down.
+// Only boxes shaped like a door: SAM sometimes calls the whole corridor a door.
+// (The door scene is a close-up, so its door may be wide.)
+const doorLike = (b, wide) => b.w <= (wide ? 0.62 : 0.32) && b.h >= b.w * (wide ? 0.9 : 1.3);
+const doorsOf = (scene) => (scene.doors ?? []).filter((b) => doorLike(b, scene.id === 'door'));
+
 function forwardDoor(scene) {
-  if (scene.id === 'corridor' && state.walk.index === 1 && scene.doors.length > 1) return 1;
+  if (scene.id === 'corridor' && state.walk.index === 1 && doorsOf(scene).length > 1) return 1;
   return 0;
 }
+
+// A door that stands open is never "locked": every open door leads on.
+const leadsOn = (scene, spot, i) => i === forwardDoor(scene) || Boolean(spot.open);
 
 function placeHotspots(scene) {
   const layer = $('#hotspots');
@@ -497,118 +519,385 @@ function placeHotspots(scene) {
     layer.replaceChildren(); // the way out only opens once a line is kept
     return;
   }
+  if (scene.pending) {
+    layer.replaceChildren(); // its doors are still being found
+    return;
+  }
   const exit = BOARD_SCENES.has(scene.id);
-  const spots = scene.doors.length ? scene.doors : [{ x: 0.3, y: 0.25, w: 0.4, h: 0.6 }];
+  const spots = doorsOf(scene).length ? doorsOf(scene) : [{ x: 0.4, y: 0.3, w: 0.2, h: 0.5 }];
   const open = forwardDoor(scene);
   layer.replaceChildren(
     ...spots.map((spot, i) => {
       const button = el('button', null, 'hotspot');
       button.type = 'button';
       box(button, spot);
-      if (exit || i === open) {
+      if (exit || leadsOn(scene, spot, i)) {
         button.classList.add('forward');
         button.setAttribute('aria-label', exit ? t('throughDoor') : t('forward'));
         button.addEventListener('click', () => advance(spot));
       } else {
         button.classList.add('locked');
         button.setAttribute('aria-label', t('lockedDoor'));
-        button.addEventListener('click', () => rattle(button));
+        button.addEventListener('click', () => rattle(button, spot));
       }
       return button;
     }),
   );
 }
 
-function rattle(button) {
+async function rattle(button, spot) {
+  if (state.stats) state.stats.locked += 1;
   state.audio?.rattle();
   say(t('locked'));
-  if (!REDUCED_MOTION) {
-    button.animate(
-      [{ transform: 'translateX(0)' }, { transform: 'translateX(-3px)' }, { transform: 'translateX(3px)' }, { transform: 'translateX(-2px)' }, { transform: 'translateX(0)' }],
-      { duration: 360 },
-    );
-  }
+  if (REDUCED_MOTION || !spot || state.busy) return;
+  const door = await doorLeaf(spot);
+  if (!door) return;
+  const { leaf } = door;
+  leaf.hidden = false;
+  await leaf.animate(
+    [{ transform: 'translateX(0)' }, { transform: 'translateX(-0.25%)' }, { transform: 'translateX(0.25%)' }, { transform: 'translateX(-0.15%)' }, { transform: 'translateX(0)' }],
+    { duration: 360 },
+  ).finished;
+  if ($('#door-gap').hidden) leaf.hidden = true;
 }
 
 // The page writes the name itself; it is never sent to a model.
 const BLUR_BY_WALK = [2.4, 1.8, 1.4];
 
-function placeName(scene, sharp = false) {
+async function placeName(scene, sharp = false) {
   const label = $('#board-name');
   if (scene.id !== 'classroom' || !scene.board || !state.name) {
     label.hidden = true;
     return;
   }
-  const b = scene.board;
-  const { w, h } = stageSize();
+  const { BW, BH, transform } = await boardPlane(scene);
+  if (!sameScene(currentScene(), scene)) return;
   label.className = state.lang === 'zh' ? 'vertical' : '';
+  // Laid on the board's surface: a spot on it (x, y, w, h in board pixels).
+  const at = (x, y, width, height) =>
+    Object.assign(label.style, { left: '0', top: '0', width: `${width}px`, height: height ? `${height}px` : 'auto', transformOrigin: '0 0', transform: `${transform} translate(${x}px, ${y}px)` });
   if (state.lang === 'zh') {
     // The narrow column at the board's right edge, written top to bottom.
     const chars = [...`${t('onDuty')}　${state.name}`].length;
-    Object.assign(label.style, {
-      left: `${(b.x + b.w * 0.9) * 100}%`,
-      top: `${(b.y + b.h * 0.06) * 100}%`,
-      width: `${b.w * 0.08 * 100}%`,
-      height: `${b.h * 0.88 * 100}%`,
-      fontSize: `${Math.max(9, Math.min(b.w * w * 0.055, (b.h * h * 0.88) / (chars + 1)))}px`,
-    });
+    at(BW * 0.9, BH * 0.06, BW * 0.08, BH * 0.88);
+    label.style.fontSize = `${Math.max(8, Math.min(BW * 0.055, (BH * 0.88) / (chars + 1)))}px`;
     label.replaceChildren(el('span', t('onDuty')), el('span', state.name, 'who'));
   } else {
-    Object.assign(label.style, {
-      left: `${(b.x + b.w * 0.68) * 100}%`,
-      top: `${(b.y + b.h * 0.76) * 100}%`,
-      width: `${b.w * 0.3 * 100}%`,
-      height: 'auto',
-      fontSize: `${Math.max(9, b.h * h * 0.11)}px`,
-    });
+    at(BW * 0.66, BH * 0.78, BW * 0.32, 0);
+    label.style.fontSize = `${Math.max(8, BH * 0.1)}px`;
     label.replaceChildren(el('span', `${t('onDuty')}: `), el('span', state.name, 'who'));
   }
   const blur = sharp ? 0 : BLUR_BY_WALK[Math.min(state.walk.index, BLUR_BY_WALK.length - 1)];
-  label.style.filter = `url(#chalk) blur(${blur}px)`;
+  label.style.filter = blur ? `blur(${blur}px)` : 'none';
   label.hidden = false;
 }
 
 // Your exam papers carry your name and a red score; the ranking sheet has you last.
-const FILLER_ZH = '今天的作業明早交回教室窗戶記得關好值日生擦黑板倒垃圾鎖門走廊不要奔跑考試成績下週公布請家長簽名';
-const FILLER_EN = 'remember to close the windows tomorrow homework due erase the board lock the door before you leave';
+// Made-up classmates for the ranking: common Taiwanese surnames and given names.
+const SURNAMES = ['陳', '林', '黃', '張', '李', '王', '吳', '劉', '蔡', '楊', '許', '鄭', '謝', '郭', '洪', '曾', '邱', '廖'];
+const GIVEN = ['怡君', '家豪', '雅婷', '冠宇', '佳穎', '宗翰', '詩涵', '俊傑', '欣怡', '承恩', '柏翰', '思妤', '志明', '育誠', '佩珊', '彥廷', '筱涵', '建宏'];
+const SURNAMES_EN = ['Chen', 'Lin', 'Huang', 'Chang', 'Li', 'Wang', 'Wu', 'Liu', 'Tsai', 'Yang', 'Hsu', 'Cheng', 'Hsieh', 'Kuo', 'Hung', 'Tseng', 'Chiu', 'Liao'];
+const GIVEN_EN = ['Yi-chun', 'Chia-hao', 'Ya-ting', 'Kuan-yu', 'Chia-ying', 'Tsung-han', 'Shih-han', 'Chun-chieh', 'Hsin-yi', 'Cheng-en', 'Po-han', 'Ssu-yu', 'Chih-ming', 'Yu-cheng', 'Pei-shan', 'Yen-ting', 'Hsiao-han', 'Chien-hung'];
+
+// What a teacher would have left on the board, if the real lines are not ready yet.
+const NOTICES = {
+  zh: [
+    ['明天考第三課到第五課', '值日生：擦黑板、倒垃圾、鎖門', '放學前請關好門窗'],
+    ['數學考卷明天發回', '午休時間請保持安靜', '值日生放學後到辦公室'],
+  ],
+  en: [
+    ['Test tomorrow: chapters 3 to 5', 'On duty: erase the board, empty the bin, lock up', 'Close the windows before you leave'],
+    ['Maths papers back tomorrow', 'Quiet during the nap', 'Student on duty: see me after school'],
+  ],
+};
 
 function fillerName(i) {
-  if (state.lang === 'en') {
-    const letters = 'abcdefghiklmnoprstuvwy';
-    return Array.from({ length: 2 }, (_, k) => {
-      const n = 4 + ((i * 3 + k * 5) % 4);
-      const word = Array.from({ length: n }, (_, j) => letters[(i * 7 + k * 11 + j * 13) % letters.length]).join('');
-      return word[0].toUpperCase() + word.slice(1);
-    }).join(' ');
-  }
-  const chars = [...FILLER_ZH];
-  return Array.from({ length: 3 }, (_, k) => chars[(i * 13 + k * 7) % chars.length]).join('');
+  const s = (i * 7) % SURNAMES.length;
+  const g = (i * 11 + 3) % GIVEN.length;
+  return state.lang === 'en' ? `${SURNAMES_EN[s]} ${GIVEN_EN[g]}` : `${SURNAMES[s]}${GIVEN[g]}`;
 }
 
-function placeMarks(scene) {
+// ---------- papers in perspective ----------
+
+// Where the white sheet inside a box really is: the bright, unsaturated region around
+// the middle of the box, and its four corners. Null when it does not look like a sheet.
+const sheetCache = new Map();
+
+function loadPicture(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+function sheetCorners(url, b, kind = 'sheet') {
+  const key = `${kind}|${url}|${b.x.toFixed(4)}|${b.y.toFixed(4)}|${b.w.toFixed(4)}`;
+  if (!sheetCache.has(key)) sheetCache.set(key, findSheet(url, b, kind).catch(() => null));
+  return sheetCache.get(key);
+}
+
+// kind: 'sheet' (white paper), 'board' (a dark chalkboard), 'door' (the colour of the
+// door's middle). The region is found by Otsu's threshold, filled from the middle.
+async function findSheet(url, b, kind = 'sheet') {
+  const img = await loadPicture(url);
+  const pad = kind === 'door' ? 0.05 : 0.02; // look only inside the box SAM found
+  const x0 = Math.max(0, b.x - b.w * pad);
+  const y0 = Math.max(0, b.y - b.h * pad);
+  const x1 = Math.min(1, b.x + b.w * (1 + pad));
+  const y1 = Math.min(1, b.y + b.h * (1 + pad));
+  const W = 180;
+  const H = Math.max(12, Math.round((W * (y1 - y0) * img.naturalHeight) / ((x1 - x0) * img.naturalWidth)));
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const g = canvas.getContext('2d', { willReadFrequently: true });
+  g.drawImage(img, x0 * img.naturalWidth, y0 * img.naturalHeight, (x1 - x0) * img.naturalWidth, (y1 - y0) * img.naturalHeight, 0, 0, W, H);
+  const px = g.getImageData(0, 0, W, H).data;
+  // The door's own colour: the median of a strip down its middle.
+  let ref = null;
+  if (kind === 'door') {
+    const strip = [];
+    for (let y = Math.round(H * 0.3); y < Math.round(H * 0.7); y++) {
+      for (let x = Math.round(W * 0.45); x < Math.round(W * 0.55); x++) strip.push(y * W + x);
+    }
+    ref = [0, 1, 2].map((k) => strip.map((i) => px[i * 4 + k]).sort((a, z) => a - z)[strip.length >> 1]);
+  }
+  const white = new Uint8Array(W * H);
+  const hist = new Array(256).fill(0);
+  for (let i = 0; i < W * H; i++) {
+    const r = px[i * 4], gr = px[i * 4 + 1], bl = px[i * 4 + 2];
+    let v;
+    if (kind === 'board') v = 255 - (r + gr + bl) / 3; // dark
+    else if (kind === 'door') v = 255 - Math.hypot(r - ref[0], gr - ref[1], bl - ref[2]) * 2.2; // like the door
+    else v = (r + gr + bl) / 3 - (Math.max(r, gr, bl) - Math.min(r, gr, bl)) * 1.6; // sheet / pinned: bright and grey, not tinted glass
+    v = Math.max(0, Math.min(255, Math.round(v)));
+    white[i] = v;
+    hist[v] += 1;
+  }
+  let sum = 0;
+  for (let v = 0; v < 256; v++) sum += v * hist[v];
+  let below = 0, belowSum = 0, best = -1, threshold = 160;
+  for (let v = 0; v < 256; v++) {
+    below += hist[v];
+    if (!below || below === W * H) continue;
+    belowSum += v * hist[v];
+    const m0 = belowSum / below;
+    const m1 = (sum - belowSum) / (W * H - below);
+    const spread = below * (W * H - below) * (m0 - m1) ** 2;
+    if (spread > best) {
+      best = spread;
+      threshold = v;
+    }
+  }
+  // Paper must also be close to the whitest part of the box (glass and desk are not).
+  let top = 0;
+  if (kind === 'sheet' || kind === 'pinned') {
+    const sorted = [...white].sort((a, z) => z - a);
+    top = sorted[Math.floor(sorted.length * 0.05)] * 0.72;
+  }
+  const bright = (i) => white[i] > Math.max(threshold, top);
+  // Start from the bright pixel nearest the middle of the box, and fill.
+  const cx = Math.round(W / 2), cy = Math.round(H / 2);
+  let seed = -1;
+  for (let r = 0; r < Math.min(W, H) / 2 && seed < 0; r++) {
+    for (let dy = -r; dy <= r && seed < 0; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        const x = cx + dx, y = cy + dy;
+        if (x >= 0 && y >= 0 && x < W && y < H && bright(y * W + x)) {
+          seed = y * W + x;
+          break;
+        }
+      }
+    }
+  }
+  if (seed < 0) return null;
+  const seen = new Uint8Array(W * H);
+  const stack = [seed];
+  seen[seed] = 1;
+  let count = 0;
+  const left = new Array(H).fill(Infinity), right = new Array(H).fill(-Infinity);
+  while (stack.length) {
+    const i = stack.pop();
+    const x = i % W, y = (i - x) / W;
+    count += 1;
+    if (x < left[y]) left[y] = x;
+    if (x > right[y]) right[y] = x;
+    for (const n of [i - 1, i + 1, i - W, i + W]) {
+      if (n < 0 || n >= W * H || seen[n]) continue;
+      if ((n === i - 1 && x === 0) || (n === i + 1 && x === W - 1)) continue;
+      seen[n] = 1;
+      if (bright(n)) stack.push(n);
+    }
+  }
+  // The sheet's outline (convex hull), then the four outline points enclosing the most area.
+  const points = [];
+  for (let y = 0; y < H; y++) if (left[y] <= right[y]) points.push([left[y], y], [right[y], y]);
+  const hull = convexHull(points);
+  if (hull.length < 4) return null;
+  const step = Math.max(1, Math.ceil(hull.length / 40));
+  const ring = hull.filter((_, i) => i % step === 0);
+  const area = (q) => {
+    let a = 0;
+    for (let k = 0; k < q.length; k++) a += q[k][0] * q[(k + 1) % q.length][1] - q[(k + 1) % q.length][0] * q[k][1];
+    return Math.abs(a) / 2;
+  };
+  let quad = null, most = 0;
+  const n = ring.length;
+  for (let i = 0; i < n; i++)
+    for (let j = i + 1; j < n; j++)
+      for (let k = j + 1; k < n; k++)
+        for (let l = k + 1; l < n; l++) {
+          const q = [ring[i], ring[j], ring[k], ring[l]];
+          const a = area(q);
+          if (a > most) {
+            most = a;
+            quad = q;
+          }
+        }
+  if (!quad) return null;
+  // Order: top-left, top-right, bottom-right, bottom-left.
+  const byY = [...quad].sort((p, q) => p[1] - q[1]);
+  const [tl, tr] = byY.slice(0, 2).sort((p, q) => p[0] - q[0]);
+  const [bl, br] = byY.slice(2).sort((p, q) => p[0] - q[0]);
+  const corners = [tl, tr, br, bl];
+  // A sheet: it fills a good part of its box, matches the box SAM found, and has sane angles.
+  const bw = W / (1 + 2 * pad), bh = H / (1 + 2 * pad), bx = (W - bw) / 2, by = (H - bh) / 2;
+  const xs = corners.map((p) => p[0]), ys = corners.map((p) => p[1]);
+  const qx0 = Math.min(...xs), qx1 = Math.max(...xs), qy0 = Math.min(...ys), qy1 = Math.max(...ys);
+  const ix = Math.max(0, Math.min(qx1, bx + bw) - Math.max(qx0, bx));
+  const iy = Math.max(0, Math.min(qy1, by + bh) - Math.max(qy0, by));
+  const iou = (ix * iy) / ((qx1 - qx0) * (qy1 - qy0) + bw * bh - ix * iy);
+  const angleOk = corners.every((p, k) => {
+    const a = corners[(k + 3) % 4], c = corners[(k + 1) % 4];
+    const v1 = [a[0] - p[0], a[1] - p[1]], v2 = [c[0] - p[0], c[1] - p[1]];
+    const cos = (v1[0] * v2[0] + v1[1] * v2[1]) / (Math.hypot(...v1) * Math.hypot(...v2) || 1);
+    return cos > -0.87 && cos < 0.87; // between 30 and 150 degrees
+  });
+  // Unsure means nothing is drawn: every check must pass. A pinned sheet is only a part
+  // of its board, so it is checked for size and shape instead of filling the box.
+  if (kind === 'pinned') {
+    const tall = qy1 - qy0 > (qx1 - qx0) * 1.1;
+    if (most < bw * bh * 0.06 || !tall || !angleOk) return null;
+  } else {
+    const fill = kind === 'board' ? 0.55 : 0.42;
+    if (count < bw * bh * fill * 0.8 || most < bw * bh * fill || iou < 0.6 || !angleOk) return null;
+  }
+  return corners.map(([x, y]) => [x0 + (x / W) * (x1 - x0), y0 + (y / H) * (y1 - y0)]);
+}
+
+function convexHull(points) {
+  const pts = [...points].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const lower = [], upper = [];
+  for (const p of pts) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop();
+    lower.push(p);
+  }
+  for (const p of pts.reverse()) {
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop();
+    upper.push(p);
+  }
+  return lower.slice(0, -1).concat(upper.slice(0, -1));
+}
+
+// Without a clear outline: a sheet lying flat on the desk, seen from above and in front.
+function flatSheet(b) {
+  const inset = b.w * 0.07;
+  return [
+    [b.x + inset, b.y + b.h * 0.06],
+    [b.x + b.w - inset * 0.4, b.y],
+    [b.x + b.w, b.y + b.h * 0.94],
+    [b.x, b.y + b.h],
+  ];
+}
+
+// The CSS transform that lays a w x h element onto four corners (tl, tr, br, bl), in pixels.
+function onCorners(w, h, [p0, p1, p2, p3]) {
+  const dx1 = p1[0] - p2[0], dx2 = p3[0] - p2[0], dx3 = p0[0] - p1[0] + p2[0] - p3[0];
+  const dy1 = p1[1] - p2[1], dy2 = p3[1] - p2[1], dy3 = p0[1] - p1[1] + p2[1] - p3[1];
+  const den = dx1 * dy2 - dx2 * dy1;
+  const g = (dx3 * dy2 - dx2 * dy3) / den;
+  const k = (dx1 * dy3 - dx3 * dy1) / den;
+  const a = p1[0] - p0[0] + g * p1[0], b = p3[0] - p0[0] + k * p3[0], c = p0[0];
+  const d = p1[1] - p0[1] + g * p1[1], e = p3[1] - p0[1] + k * p3[1], f = p0[1];
+  return `matrix3d(${a / w},${d / w},0,${g / w},${b / h},${e / h},0,${k / h},0,0,1,0,${c},${f},0,1)`;
+}
+
+// Four corners in stage pixels, for a box when nothing better was found.
+const boxCorners = (b) => [
+  [b.x, b.y],
+  [b.x + b.w, b.y],
+  [b.x + b.w, b.y + b.h],
+  [b.x, b.y + b.h],
+];
+const toStage = (corners) => {
+  const { w, h } = stageSize();
+  return corners.map(([x, y]) => [x * w, y * h]);
+};
+
+// The chalkboard as a flat surface: an element BW x BH laid onto its four corners.
+async function boardPlane(scene) {
+  const found = await sheetCorners(scene.photo, scene.board, 'board');
+  const corners = toStage(found ?? boxCorners(scene.board));
+  const len = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+  const across = (len(corners[0], corners[1]) + len(corners[3], corners[2])) / 2;
+  const down = (len(corners[0], corners[3]) + len(corners[1], corners[2])) / 2;
+  const BH = 300;
+  const BW = Math.round(BH * Math.min(4.5, Math.max(1, across / Math.max(1, down))));
+  return { BW, BH, transform: onCorners(BW, BH, corners) };
+}
+
+function sheetOverlap(a, b) {
+  const w = Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x));
+  const h = Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+  return (w * h) / Math.min(a.w * a.h, b.w * b.h);
+}
+
+const SHEET_W = 424; // an exam sheet, landscape
+const SHEET_H = 300;
+
+async function placeMarks(scene) {
   const layer = $('#marks');
   layer.replaceChildren();
+  await sortBoards(scene);
   const scores = state.bible?.scores ?? [];
   const name = state.name || t('noName');
-  const { h } = stageSize();
   const onDesk = (b) => b.y + b.h / 2 > 0.45 && b.w > b.h * 0.8; // not the blinds, not a poster
-  const papers = scene.id === 'office' || isEndingScene(scene) ? (scene.papers ?? []).filter(onDesk) : [];
-  papers.slice(0, scores.length).forEach((paper, i) => {
-    const mark = el('div', null, 'paper-mark');
-    box(mark, paper);
-    const size = Math.max(8, Math.min(paper.h * h * 0.16, (paper.w * stageSize().w * 0.6) / Math.max(4, [...name].length + 3)));
+  const candidates = (scene.id === 'office' || isEndingScene(scene) ? (scene.papers ?? []).filter(onDesk) : [])
+    .filter((b) => b.w * b.h > 0.006) // too small to write on legibly
+    .sort((a, b) => b.w * b.h - a.w * a.h)
+    .filter((paper, i, all) => all.slice(0, i).every((other) => sheetOverlap(paper, other) < 0.3)); // one mark per stack
+  const found = await Promise.all(candidates.map((paper) => sheetCorners(scene.photo, paper)));
+  if (!sameScene(currentScene(), scene)) return;
+  // Only sheets whose outline was found; if none was, the largest one gets a small label
+  // in its middle, where the paper surely is.
+  let sheets = candidates.map((paper, i) => ({ paper, corners: found[i] })).filter((s) => s.corners);
+  if (!sheets.length && candidates[0]) {
+    const b = candidates[0];
+    sheets = [{ paper: b, corners: boxCorners({ x: b.x + b.w * 0.22, y: b.y + b.h * 0.25, w: b.w * 0.56, h: b.h * 0.5 }) }];
+  }
+  sheets.slice(0, scores.length).forEach(({ corners }, i) => {
     const score = scores[i];
     const subject = state.lang === 'zh' ? score.subject : score.subject_en;
+    const mark = el('div', null, 'paper-mark on-sheet');
     mark.append(el('span', `${subject}${state.lang === 'zh' ? '　' : '  '}${name}`, 'paper-name'), el('span', String(score.score), 'paper-score'));
-    mark.style.fontSize = `${size}px`;
+    Object.assign(mark.style, { width: `${SHEET_W}px`, height: `${SHEET_H}px`, fontSize: `${Math.min(30, (SHEET_W * 0.5) / Math.max(4, [...name].length + 3))}px` });
+    mark.style.transform = onCorners(SHEET_W, SHEET_H, toStage(corners));
     layer.append(mark);
   });
   if (scene.id === 'office' && scene.notice) {
+    // The long sheet pinned in the middle of the cork board; without it, no ranking.
     const n = scene.notice;
-    const sheet = el('div', null, 'ranking');
-    box(sheet, { x: n.x + n.w * 0.3, y: n.y + n.h * 0.06, w: n.w * 0.4, h: n.h * 0.88 });
+    const found = await sheetCorners(scene.photo, n, 'pinned');
+    if (!sameScene(currentScene(), scene)) return;
+    const corners = found ?? boxCorners({ x: n.x + n.w * 0.36, y: n.y + n.h * 0.08, w: n.w * 0.28, h: n.h * 0.84 });
+    const sheet = el('div', null, found ? 'ranking' : 'ranking pinned');
+    const RW = 300, RH = 600;
+    Object.assign(sheet.style, { left: '0', top: '0', width: `${RW}px`, height: `${RH}px`, transformOrigin: '0 0', transform: onCorners(RW, RH, toStage(corners)) });
     const rows = 12;
-    sheet.style.fontSize = `${Math.max(4, (n.h * h * 0.88 * 0.94) / ((rows + 1) * 1.2))}px`;
+    sheet.style.fontSize = `${(RH * 0.9) / ((rows + 1) * 1.25)}px`;
     sheet.append(el('div', t('rank'), 'rank-title'));
     for (let i = 1; i < rows - 1; i++) sheet.append(el('div', `${i}. ${fillerName(i)}`, 'rank-row'));
     sheet.append(el('div', '⋮', 'rank-row'));
@@ -619,13 +908,36 @@ function placeMarks(scene) {
 
 // ---------- the chalkboard ----------
 
-function scribble(i) {
-  if (state.lang === 'en') {
-    const words = FILLER_EN.split(' ');
-    return Array.from({ length: 3 + i }, (_, k) => words[(k * 5 + i * 3) % words.length]).join(' ');
-  }
-  const chars = [...FILLER_ZH];
-  return Array.from({ length: 6 + i }, (_, k) => chars[(k * 7 + i * 11) % chars.length]).join('');
+function boardLine(i) {
+  const real = state.lines?.texts?.[i];
+  if (real) return state.lang === 'en' ? real.title_en || real.title : real.title;
+  const walk = Math.min(state.walk?.index ?? 0, NOTICES.zh.length - 1);
+  return NOTICES[state.lang === 'en' ? 'en' : 'zh'][walk][i];
+}
+
+// The lines are dealt while you walk; they are on the board by the time you reach it.
+function fetchLines(tries = 6) {
+  if (tries === 6) state.lines = null;
+  const walk = state.walk;
+  api('/api/lines', { schoolId: state.schoolId })
+    .then((res) => {
+      if (state.walk !== walk || state.pick) return;
+      if (!res?.lines) {
+        if (tries > 1) setTimeout(() => fetchLines(tries - 1), 3000);
+        return;
+      }
+      state.lines = { texts: res.lines, fixed: res.fixed ?? null };
+      const scene = currentScene();
+      if (scene && isChoiceScene(scene) && !state.pick && !state.erased.size) placeChoices(scene);
+    })
+    .catch(() => {});
+}
+
+// A line that fits the board on one row (sizes are on the board's own surface).
+function lineSize({ BW, BH }, text) {
+  const cjk = /[㐀-鿿]/.test(text);
+  const ems = [...text].length * (cjk ? 1.08 : 0.5);
+  return Math.max(8, Math.min(BH * 0.14, (BW * 0.8) / Math.max(ems, 1)));
 }
 
 function chalkWrite(target, text) {
@@ -644,64 +956,116 @@ function chalkWrite(target, text) {
   }, 110);
 }
 
-function placeChoices(scene) {
+// Mean brightness of a box in the photo (0 dark, 1 white).
+async function boxLight(url, b) {
+  const img = await loadPicture(url);
+  const canvas = document.createElement('canvas');
+  canvas.width = 24;
+  canvas.height = 24;
+  const g = canvas.getContext('2d', { willReadFrequently: true });
+  g.drawImage(img, b.x * img.naturalWidth, b.y * img.naturalHeight, b.w * img.naturalWidth, b.h * img.naturalHeight, 0, 0, 24, 24);
+  const px = g.getImageData(0, 0, 24, 24).data;
+  let sum = 0;
+  for (let i = 0; i < px.length; i += 4) sum += (px[i] + px[i + 1] + px[i + 2]) / 765;
+  return sum / (px.length / 4);
+}
+
+// Once per place: if SAM swapped the chalkboard and the cork board, swap them back.
+async function sortBoards(scene) {
+  if (scene.boardsChecked || !scene.board || !scene.notice) return;
+  scene.boardsChecked = true;
+  const [board, notice] = await Promise.all([boxLight(scene.photo, scene.board), boxLight(scene.photo, scene.notice)]).catch(() => [0, 1]);
+  if (board > notice + 0.08) [scene.board, scene.notice] = [scene.notice, scene.board];
+}
+
+async function placeChoices(scene) {
   const layer = $('#board-choices');
+  await sortBoards(scene);
   if (!isChoiceScene(scene)) {
     layer.replaceChildren();
     layer.hidden = true;
     return;
   }
-  const board = scene.board;
-  const { h } = stageSize();
+  const plane = await boardPlane(scene);
+  if (!sameScene(currentScene(), scene)) return;
+  const { BW, BH } = plane;
+  Object.assign(layer.style, { inset: 'auto', left: '0', top: '0', width: `${BW}px`, height: `${BH}px`, transformOrigin: '0 0', transform: plane.transform });
+  layer.plane = plane;
   const pick = state.pick;
   layer.hidden = false;
   layer.replaceChildren(
     ...[0, 1, 2].map((i) => {
       const line = el('button', null, 'chalk-line');
       line.type = 'button';
+      const text = pick?.index === i && pick.title ? pick.title : boardLine(i);
       Object.assign(line.style, {
-        left: `${(board.x + board.w * 0.05) * 100}%`,
-        top: `${(board.y + board.h * (0.2 + i * 0.25)) * 100}%`,
-        maxWidth: `${board.w * 0.8 * 100}%`,
-        fontSize: `${Math.max(10, board.h * h * 0.13)}px`,
+        left: '5%',
+        top: `${20 + i * 25}%`,
+        maxWidth: '80%',
+        fontSize: `${lineSize(plane, text)}px`,
       });
-      line.textContent = pick?.index === i && pick.title ? pick.title : scribble(i);
+      line.textContent = text;
       if (pick) line.classList.add(pick.index === i ? 'kept' : 'gone');
-      line.disabled = Boolean(pick);
-      line.setAttribute('aria-label', state.lang === 'zh' ? `留下第 ${i + 1} 行` : `Keep line ${i + 1}`);
-      line.addEventListener('click', () => choose(i));
+      else if (state.erased.has(i)) line.classList.add('gone');
+      line.disabled = Boolean(pick) || state.erased.has(i);
+      line.setAttribute('aria-label', state.lang === 'zh' ? `擦掉第 ${i + 1} 行` : `Erase line ${i + 1}`);
+      line.addEventListener('click', () => eraseLine(i));
       return line;
     }),
   );
 }
 
 function fitKeptLine(line, board, text) {
-  const { w, h } = stageSize();
-  const width = board.w * w * 0.9;
-  const height = board.h * h;
+  const { BW, BH } = $('#board-choices').plane ?? { BW: 900, BH: 300 };
+  const width = BW * 0.9;
   const cjk = /[㐀-鿿]/.test(text);
   const ems = [...text].length * (cjk ? 1.05 : 0.5);
-  const size = Math.max(10, Math.min(height * 0.2, (width * 2) / Math.max(ems, 1), (width / Math.max(ems, 1)) * 1.6));
+  const size = Math.max(8, Math.min(BH * 0.2, (width * 2) / Math.max(ems, 1), (width / Math.max(ems, 1)) * 1.6));
   Object.assign(line.style, {
-    top: `${(board.y + board.h * 0.42) * 100}%`,
-    maxWidth: `${board.w * 0.9 * 100}%`,
+    top: '42%',
+    maxWidth: '90%',
     fontSize: `${size}px`,
     whiteSpace: 'normal',
     lineHeight: '1.25',
   });
 }
 
+// Erase two lines; the one left is kept. In the replay, the line that was kept when it
+// was recorded will not come off the board.
+function eraseLine(index) {
+  if (state.pick || state.busy || state.erased.has(index)) return;
+  const line = $('#board-choices').children[index];
+  state.audio?.erase();
+  if (state.lines?.fixed === index) {
+    line?.animate([{ transform: 'translateY(-50%)' }, { transform: 'translate(-3px, -50%)' }, { transform: 'translate(3px, -50%)' }, { transform: 'translateY(-50%)' }], { duration: 380 });
+    say(t('wontErase'));
+    return;
+  }
+  state.erased.add(index);
+  state.stats?.erased.push(line?.textContent ?? '');
+  if (line) {
+    line.disabled = true;
+    line.classList.add('erased');
+  }
+  api('/api/erase', { schoolId: state.schoolId, index }).catch(() => {});
+  if (state.erased.size >= 2) {
+    const kept = [0, 1, 2].find((i) => !state.erased.has(i));
+    setTimeout(() => choose(kept), 650);
+  } else say(t('eraseOneMore'));
+}
+
 // Keeping a line is the choice. Its version of the school was rendered while you walked.
 function choose(index) {
   if (state.pick || state.busy) return;
+  state.stats?.kept.push($('#board-choices').children[index]?.textContent ?? '');
   const scene = currentScene();
   const pick = { index, done: false, title: null };
   state.pick = pick;
   [...$('#board-choices').children].forEach((line, i) => {
     line.disabled = true;
-    line.classList.add(i === index ? 'kept' : 'erased');
+    if (i === index) line.classList.add('kept');
+    else if (!state.erased.has(i)) line.classList.add('erased');
   });
-  state.audio?.erase();
   say(t('changing'));
   placeHotspots(scene);
   pick.promise = api('/api/draw', { schoolId: state.schoolId, index });
@@ -723,8 +1087,9 @@ function choose(index) {
     (err) => {
       if (state.pick !== pick) return;
       state.pick = null;
+      state.erased.clear();
       showError(err.message);
-      if (currentScene() === scene) {
+      if (sameScene(currentScene(), scene)) {
         placeChoices(scene);
         placeHotspots(scene);
         say(t('eraseHint'));
@@ -744,6 +1109,7 @@ function walkBack() {
     const res = await pick.promise;
     const card = res.cards[res.picked];
     state.last = res.last;
+    fillWalk(res.walk);
     await beginWalk(res.walk, cardText(card).whisper, card.sound);
   });
 }
@@ -784,48 +1150,246 @@ function placeDateStamp() {
 
 // ---------- dynamics ----------
 
-// A ball bounces out of the dark end of the corridor and rolls to your feet.
-function rollBall() {
-  if ($('#walk-screen').hidden || currentScene()?.id !== 'corridor' || REDUCED_MOTION) {
-    state.audio?.ball();
-    return;
+// A ball bounces out of the dark end of the corridor and rolls towards you. It moves on
+// the floor in the photo's perspective and stops short of anything in its way.
+const BALL_TAN_Y = 0.45; // the walk's camera (walk3d.js)
+const BALL_TAN_X = BALL_TAN_Y * 1.5;
+
+async function floorPath(scene) {
+  // Without a depth map: the corridor's vanishing point is a little above the middle.
+  let vx = 0.5, vy = 0.47, y0 = 0.53, depthAt = null;
+  if (scene.depth) {
+    try {
+      const img = await loadPicture(scene.depth);
+      const W = 96, H = 64;
+      const canvas = document.createElement('canvas');
+      canvas.width = W;
+      canvas.height = H;
+      const g = canvas.getContext('2d', { willReadFrequently: true });
+      g.drawImage(img, 0, 0, W, H);
+      const px = g.getImageData(0, 0, W, H).data;
+      depthAt = (x, y) => px[(Math.min(H - 1, Math.max(0, Math.round(y * (H - 1)))) * W + Math.min(W - 1, Math.max(0, Math.round(x * (W - 1))))) * 4] / 255;
+      // The far end: the darkest (farthest) patch in the middle of the picture.
+      let far = Infinity;
+      for (let y = 0.3; y <= 0.62; y += 0.02) {
+        for (let x = 0.3; x <= 0.7; x += 0.02) {
+          let d = 0;
+          for (const [dx, dy] of [[0, 0], [0.015, 0], [-0.015, 0], [0, 0.015], [0, -0.015]]) d += depthAt(x + dx, y + dy);
+          if (d < far) {
+            far = d;
+            vx = x;
+            vy = y;
+          }
+        }
+      }
+      // The floor starts where the depth begins to come nearer below the far end.
+      const floor0 = depthAt(vx, vy);
+      y0 = vy + 0.03;
+      while (y0 < vy + 0.2 && depthAt(vx, y0) < floor0 + 0.06) y0 += 0.01;
+    } catch {
+      depthAt = null;
+    }
   }
+  return { vx, vy, y0: Math.min(y0, 0.75), depthAt };
+}
+
+// Where the ball goes, frame by frame: bouncing out of the far end, then rolling towards
+// the camera. toFeet: it rolls all the way to your feet. Null when something is in the way.
+function ballFrames({ vx, vy, y0, depthAt }, side, toFeet) {
+  const camH = 1.3;
+  const fy = 0.5 / BALL_TAN_Y, fx = 0.5 / BALL_TAN_X;
+  const z0 = (camH * fy) / Math.max(0.02, y0 - vy);
+  const zEnd = toFeet ? (camH * fy) / Math.max(0.05, 0.93 - vy) : Math.max(2, z0 * 0.45);
+  const distance = Math.max(1, z0 - zEnd);
+  const seconds = toFeet ? 5.2 : 4.2;
+  const v0 = (2 * distance) / seconds; // slows evenly and stops where it should
+  const decel = v0 / seconds;
+  const steps = 64;
+  const frames = [];
+  let lastDepth = null;
+  for (let i = 0; i <= steps; i++) {
+    const t = (i / steps) * seconds;
+    const travelled = v0 * t - 0.5 * decel * t * t;
+    const z = Math.max(zEnd, z0 - travelled);
+    const X = side * Math.min(1, travelled / distance);
+    // Bounces that match the sound: contacts at 0.1 s, then shorter and lower each time.
+    let lift = 0, contact = 0.1, gap = 0.55;
+    for (let k = 0; k < 7; k++) {
+      if (t >= contact && t < contact + gap) {
+        const u = t - contact;
+        lift = 0.5 * 9.8 * u * (gap - u);
+        break;
+      }
+      contact += gap;
+      gap *= 0.68;
+    }
+    if (t < 0.1) lift = 0.5 * 9.8 * (0.1 - t) * (0.1 + t) * 0.6;
+    const floor = vy + (camH * fy) / z;
+    const x = vx + (X * fx) / z;
+    const size = (0.24 * fy) / z; // a basketball, 0.24 m across, as a share of the picture's height
+    // Something standing on the floor ahead: the depth jumps nearer.
+    if (depthAt) {
+      const d = depthAt(x, floor - size * 0.5);
+      if (lastDepth !== null && d - lastDepth > 0.12) return { frames, blocked: true, seconds: frames.length ? frames[frames.length - 1].t : 0 };
+      lastDepth = d;
+    }
+    frames.push({ t, x, y: floor - (lift * fy) / z, floor, size, spin: travelled / 0.12, X, z, speed: Math.max(0, v0 - decel * t) });
+  }
+  return { frames, blocked: false, seconds };
+}
+
+async function rollBall({ toFeet = false } = {}) {
+  const scene = currentScene();
+  if ($('#walk-screen').hidden || scene?.id !== 'corridor' || REDUCED_MOTION) {
+    state.audio?.ball();
+    return false;
+  }
+  const path = await floorPath(scene);
+  if (!sameScene(currentScene(), scene)) return false;
+  // The first lane with nothing in the way; otherwise the one that gets furthest.
+  const side = Math.random() < 0.5 ? -1 : 1;
+  let best = null;
+  for (const lane of [0.2 * side, 0, -0.2 * side, 0.5 * side, -0.5 * side]) {
+    const run = ballFrames(path, lane, toFeet);
+    if (!best || (!run.blocked && best.blocked) || (run.blocked === best.blocked && run.frames.length > best.frames.length)) best = run;
+    if (!run.blocked) break;
+  }
+  const run = best.frames.length > 4 ? best : ballFrames(path, 0, false);
+  const used = run.frames;
+  const contacts = [];
+  for (let at = 0.1, gap = 0.55, k = 0; k < 7 && at < run.seconds; k++, at += gap, gap *= 0.68) contacts.push(at);
+  state.audio?.basketball({ path: used.map((f) => ({ t: f.t, x: f.X, z: f.z, speed: f.speed })), contacts });
+  await animateBall(used, run.seconds, scene);
+  const last = used[used.length - 1];
+  return sameScene(currentScene(), scene) && !best.blocked && toFeet ? last : false;
+}
+
+// A basketball drawn as a lit sphere each frame: the seams turn as it rolls, the light
+// from the ceiling stays where it is. Pebbled orange-brown leather, black seams, no marks.
+const BALL_PX = 96;
+const pebble = new Float32Array(64 * 64 * 64);
+for (let i = 0; i < pebble.length; i++) pebble[i] = Math.random();
+
+function drawBall(g, angle) {
+  const image = g.createImageData(BALL_PX, BALL_PX);
+  const r = BALL_PX / 2 - 1;
+  const ca = Math.cos(angle), sa = Math.sin(angle);
+  const light = [0.15, -0.8, 0.58]; // from the tubes above, a little in front
+  const ln = Math.hypot(...light);
+  const L = light.map((v) => v / ln);
+  const half = [L[0], L[1], L[2] + 1];
+  const hn = Math.hypot(...half);
+  const q = (k) => Math.min(63, Math.max(0, Math.floor((k + 1) * 31.5)));
+  for (let py = 0; py < BALL_PX; py++) {
+    for (let px = 0; px < BALL_PX; px++) {
+      const nx = (px + 0.5 - BALL_PX / 2) / r, ny = (py + 0.5 - BALL_PX / 2) / r;
+      const d2 = nx * nx + ny * ny;
+      if (d2 > 1) continue;
+      const nz = Math.sqrt(1 - d2);
+      // Into the ball's own coordinates: it turns about the horizontal axis as it rolls to you.
+      const u = nx, v = ny * ca - nz * sa, w = ny * sa + nz * ca;
+      const gap = Math.min(Math.abs(u), Math.abs(w), Math.abs(Math.abs(v) - (0.6 + 0.32 * (u * u - w * w))));
+      const seamMix = Math.min(1, Math.max(0, (0.03 - gap) / 0.014)); // soft-edged seams
+      const seam = seamMix > 0.5;
+      const grain = pebble[(q(u) * 64 + q(v)) * 64 + q(w)];
+      const leather = [172 * (0.86 + grain * 0.16), 84 * (0.84 + grain * 0.18), 42 * (0.8 + grain * 0.2)];
+      const base = leather.map((c, k) => c + ([24, 18, 16][k] - c) * seamMix);
+      const diffuse = Math.max(0, nx * L[0] + ny * L[1] + nz * L[2]);
+      const spec = Math.pow(Math.max(0, (nx * half[0] + ny * half[1] + nz * half[2]) / hn), 24) * (seam ? 0.05 : 0.16);
+      const shade = 0.16 + 0.84 * diffuse;
+      const edge = Math.pow(nz, 0.35); // a little darker at the rim
+      const i = (py * BALL_PX + px) * 4;
+      // The corridor's fluorescent light is a little green, and it is night.
+      image.data[i] = Math.min(255, (base[0] * shade * edge + spec * 255) * 0.82);
+      image.data[i + 1] = Math.min(255, (base[1] * shade * edge + spec * 255) * 0.9);
+      image.data[i + 2] = Math.min(255, (base[2] * shade * edge + spec * 255) * 0.8);
+      image.data[i + 3] = d2 > 0.97 ? 255 * (1 - (d2 - 0.97) / 0.03) : 255;
+    }
+  }
+  g.putImageData(image, 0, 0);
+}
+
+function animateBall(frames, seconds, scene) {
   const ball = $('#ball');
+  const shadow = $('#ball-shadow');
+  const g = ball.getContext('2d');
+  const { w, h } = stageSize();
+  const ratio = h / w;
   ball.hidden = false;
-  state.audio?.ball();
-  const at = (k, x, y, size) => ({ offset: k, left: `${x * 100}%`, top: `${y * 100}%`, width: `${size * 100}%` });
-  ball
-    .animate(
-      [
-        at(0, 0.52, 0.5, 0.006),
-        at(0.18, 0.53, 0.56, 0.012),
-        at(0.3, 0.535, 0.53, 0.016),
-        at(0.45, 0.545, 0.64, 0.026),
-        at(0.58, 0.55, 0.6, 0.032),
-        at(0.74, 0.565, 0.78, 0.05),
-        at(1, 0.6, 0.93, 0.075),
-      ],
-      { duration: 3200, easing: 'linear', fill: 'forwards' },
-    )
-    .finished.then(() => pause(2500))
-    .then(() => {
-      ball.hidden = true;
-    });
+  shadow.hidden = false;
+  const started = performance.now();
+  return new Promise((resolve) => {
+    const tick = (now) => {
+      if (!sameScene(currentScene(), scene) || ball.hidden) return resolve();
+      const t = Math.min(seconds, (now - started) / 1000);
+      let k = frames.findIndex((f) => f.t >= t);
+      if (k === -1) k = frames.length - 1;
+      k = Math.max(1, k);
+      const a = frames[k - 1], b = frames[k];
+      const m = b.t > a.t ? Math.min(1, Math.max(0, (t - a.t) / (b.t - a.t))) : 1;
+      const mix = (key) => a[key] + (b[key] - a[key]) * m;
+      const size = mix('size'), floor = mix('floor'), y = mix('y'), x = mix('x');
+      Object.assign(ball.style, { left: `${x * 100}%`, top: `${y * 100}%`, width: `${size * ratio * 100}%`, opacity: t < 0.15 ? String(t / 0.15) : '1' });
+      const height = (floor - y) / Math.max(size, 1e-3);
+      Object.assign(shadow.style, { left: `${x * 100}%`, top: `${floor * 100}%`, width: `${size * ratio * 130}%`, opacity: String(Math.max(0, 0.6 - height * 0.3)) });
+      drawBall(g, mix('spin'));
+      if (t < seconds) requestAnimationFrame(tick);
+      else resolve();
+    };
+    requestAnimationFrame(tick);
+  });
+}
+
+// The last corridor: a basketball bounces out of the dark and rolls to your feet. While
+// you watch it, someone is suddenly standing in the corridor. Then the lights stutter
+// and they are gone. No camera move: the ball is what pulls your eyes away.
+async function ballThenFigure() {
+  const scene = currentScene();
+  state.busy = true;
+  try {
+    await extraOf(state.walk, 'flicker', 3000);
+    const figure = state.walk?.flicker;
+    const flash = $('#flash');
+    if (figure?.photo) {
+      flash.src = figure.photo;
+      flash.dataset.src = figure.photo;
+      await flash.decode().catch(() => {});
+    }
+    const rolling = rollBall({ toFeet: true });
+    await pause(3300); // the ball is well on its way; the eyes are on it
+    if (sameScene(currentScene(), scene) && figure?.photo) {
+      flash.getAnimations().forEach((a) => a.cancel());
+      flash.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 1600, easing: 'ease-in', fill: 'forwards' }); // silently
+    }
+    await rolling;
+    await pause(2600);
+    if (!sameScene(currentScene(), scene)) return;
+    flicker();
+    await pause(140);
+    flash.getAnimations().forEach((a) => a.cancel());
+    flash.style.opacity = '';
+  } finally {
+    state.busy = false;
+  }
 }
 
 // The old television in the corner wakes up with static.
 let staticTimer = null;
 
-function tvStatic(scene, on) {
+async function tvStatic(scene, on) {
   const canvas = $('#tv');
   clearInterval(staticTimer);
+  canvas.want = on;
   if (!on || !scene?.tv) {
     canvas.hidden = true;
     return;
   }
-  box(canvas, scene.tv);
+  // The screen is the dark glass inside the set; without it, no static.
+  const corners = await sheetCorners(scene.photo, scene.tv, 'board');
+  if (!corners || !sameScene(currentScene(), scene) || !canvas.want) return;
   canvas.width = 96;
   canvas.height = 72;
+  Object.assign(canvas.style, { left: '0', top: '0', width: '96px', height: '72px', transformOrigin: '0 0', transform: onCorners(96, 72, toStage(corners)) });
   canvas.hidden = false;
   const g = canvas.getContext('2d');
   const image = g.createImageData(96, 72);
@@ -843,20 +1407,54 @@ function tvStatic(scene, on) {
   staticTimer = setInterval(draw, 70);
 }
 
-// The sliding door opens onto darkness before you step through.
+// A door is its own piece of the photo, cut along its four corners. Behind it, the dark.
+async function doorLeaf(spot) {
+  const scene = currentScene();
+  const corners = (await sheetCorners(scene.photo, spot, 'door')) ?? (scene.id === 'door' ? boxCorners(spot) : null);
+  if (!corners) return null; // not sure where the door's edges are: nothing moves
+  const polygon = `polygon(${corners.map(([x, y]) => `${(x * 100).toFixed(2)}% ${(y * 100).toFixed(2)}%`).join(', ')})`;
+  const leaf = $('#door-leaf');
+  leaf.style.backgroundImage = `url("${scene.photo}")`;
+  leaf.style.clipPath = polygon;
+  const gap = $('#door-gap');
+  gap.style.clipPath = polygon;
+  const xs = corners.map(([x]) => x);
+  const left = Math.min(...xs), right = Math.max(...xs);
+  // The hinge is on the side nearer the edge of the picture.
+  const hinge = left + right > 1 ? right : left;
+  return { leaf, gap, hinge, left, right };
+}
+
+// Opening: a hinged door swings in on its hinge; the classroom door slides aside.
 async function openDoor(spot) {
   state.audio?.slideDoor();
   if (REDUCED_MOTION || !spot) return pause(400);
-  const gap = $('#door-gap');
-  box(gap, spot);
+  const door = await doorLeaf(spot);
+  if (!door) return pause(500);
+  const { leaf, gap, hinge, left, right } = door;
   gap.hidden = false;
-  await gap.animate([{ clipPath: 'inset(0 0 0 100%)' }, { clipPath: 'inset(0 0 0 8%)' }], { duration: 900, easing: 'ease-in-out', fill: 'forwards' }).finished;
+  leaf.hidden = false;
+  leaf.style.transformOrigin = `${hinge * 100}% 50%`;
+  const sliding = currentScene()?.id === 'door';
+  const shift = (right - left) * 0.85 * (hinge > 0.5 ? 1 : -1) * 100;
+  const frames = sliding
+    ? [{ transform: 'translateX(0)' }, { transform: `translateX(${shift}%)` }]
+    : [{ transform: 'scaleX(1)', filter: 'brightness(1)' }, { transform: 'scaleX(0.12)', filter: 'brightness(0.55)' }];
+  gap.animate([{ opacity: 0 }, { opacity: 1, offset: 0.15 }, { opacity: 1 }], { duration: 900, fill: 'forwards' });
+  await leaf.animate(frames, { duration: 900, easing: 'ease-in-out', fill: 'forwards' }).finished;
 }
 
+// The door and its darkness fade as you step through, so nothing stays while you move.
 function closeDoorGap() {
-  const gap = $('#door-gap');
-  gap.getAnimations().forEach((a) => a.cancel());
-  gap.hidden = true;
+  for (const part of [$('#door-gap'), $('#door-leaf')]) {
+    if (part.hidden) continue;
+    const kept = part.getAnimations();
+    part.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 300, easing: 'ease-out', fill: 'forwards' }).finished.then(() => {
+      kept.forEach((a) => a.cancel());
+      part.getAnimations().forEach((a) => a.cancel());
+      part.hidden = true;
+    });
+  }
 }
 
 // A frame that is there for a moment and gone: a stinger, the room shakes, then black.
@@ -910,7 +1508,7 @@ let flickerTimer = null;
 function scheduleFlicker(first = false) {
   clearTimeout(flickerTimer);
   const index = state.walk?.index ?? 0;
-  const hasFigure = Boolean(state.walk?.flicker);
+  const hasFigure = Boolean(state.walk?.flicker) && index !== 2;
   const waitMs = first && hasFigure ? 3500 + Math.random() * 1500 : (6000 + Math.random() * 9000) / (1 + index * 0.5);
   flickerTimer = setTimeout(() => {
     if (!$('#walk-screen').hidden && !state.busy) flicker();
@@ -932,7 +1530,8 @@ function flicker() {
     { duration: 420 },
   );
   const figure = state.walk?.flicker;
-  if (figure && currentScene()?.id === figure.scene) {
+  const saved = state.walk?.index === 2; // the last corridor keeps its figure for when you look up
+  if (figure && !saved && currentScene()?.id === figure.scene) {
     const flash = $('#flash');
     if (flash.dataset.src !== figure.photo) {
       flash.src = figure.photo;
@@ -945,6 +1544,7 @@ function flicker() {
 // ---------- moving between photos ----------
 
 function render(scene) {
+  trackPlace(scene.id);
   placeDateStamp();
   $('#stage').classList.remove('blackout');
   state.audio?.night(scene.id === 'corridor' ? 'open' : 'inside'); // the corridor is open to the night
@@ -961,6 +1561,10 @@ const warpNow = () => WARP_BY_WALK[Math.min(state.walk?.index ?? 0, WARP_BY_WALK
 const followed = () => state.walk.index >= 1 && Math.random() < 0.5;
 
 function clearOverlays() {
+  for (const id of ['#ball', '#ball-shadow']) {
+    $(id).getAnimations().forEach((a) => a.cancel());
+    $(id).hidden = true;
+  }
   $('#hotspots').replaceChildren();
   $('#board-name').hidden = true;
   $('#board-choices').hidden = true;
@@ -1017,14 +1621,65 @@ async function arriveAt(scene) {
   }
 }
 
+// The same place even when its view was refreshed (a depth map arriving later).
+const sameScene = (a, b) => Boolean(a && b && a.id === b.id && a.photo === b.photo);
+
 const preload = (url) => {
   if (url) new Image().src = url;
 };
+
+// A walk arrives a place at a time: the corridor first (its depth map a little later),
+// then the other places, and the scares while you walk.
+function fillWalk(walk) {
+  const take = (i, res) => {
+    if (res.bible) state.bible = { ...state.bible, ...res.bible };
+    const view = res.view;
+    walk.scenes[i] = view;
+    preload(view.photo);
+    if (state.walk === walk && state.sceneIndex === i) {
+      walker?.forget(view.photo); // its depth map may have just arrived
+      if (!state.busy) {
+        placeHotspots(view);
+        placeName(view, state.answered);
+      }
+    }
+    return view;
+  };
+  walk.filling = walk.scenes.map((scene, i) => {
+    if (!scene.pending && !scene.refine) return Promise.resolve(scene);
+    const ask = (full) => api('/api/scene', { schoolId: state.schoolId, id: scene.id, full }).then((res) => take(i, res));
+    // First the photo and its doors (enough to walk in), then the same with its depth map.
+    const quick = scene.pending ? ask(false) : Promise.resolve(scene);
+    quick.then(() => ask(true)).catch(() => {});
+    quick.catch((err) => {
+      if (state.walk === walk) showError(err.message);
+    });
+    return quick;
+  });
+  walk.ready = {};
+  for (const want of ['scare', 'flicker']) {
+    walk.ready[want] = walk.pending
+      ? api('/api/extras', { schoolId: state.schoolId, want })
+          .then((res) => {
+            walk[want] = res[want];
+            preload(res[want]?.photo);
+          })
+          .catch(() => {})
+      : Promise.resolve();
+  }
+}
+
+// Waits for one of the walk's scares, but never forever.
+function extraOf(walk, want, ms) {
+  return Promise.race([walk?.ready?.[want] ?? Promise.resolve(), pause(ms)]);
+}
 
 async function beginWalk(walk, line, sound) {
   state.walk = walk;
   state.sceneIndex = 0;
   state.pick = null;
+  state.erased = new Set();
+  if (!state.last) fetchLines();
   preload(walk.flicker?.photo);
   preload(walk.scare?.photo);
   walk.scenes.forEach((scene) => preload(scene.photo));
@@ -1045,7 +1700,7 @@ function onArrive(scene) {
   if (scene.id === 'corridor' && index === 1 && state.bible?.pa) {
     setTimeout(() => announce(state.bible.pa[state.lang] ?? state.bible.pa.en), 2200);
   }
-  if (scene.id === 'corridor' && index === 2) setTimeout(() => rollBall(), 3500);
+  if (scene.id === 'corridor' && index === 2) setTimeout(() => ballThenFigure(), 2500);
   if (isEndingScene(scene)) rollCall(scene);
 }
 
@@ -1059,18 +1714,23 @@ async function advance(spot) {
   }
   state.busy = true;
   try {
-    const scene = state.walk.scenes[next];
+    let scene = state.walk.scenes[next];
+    if (scene.pending) {
+      loading(t('remembering'));
+      scene = await state.walk.filling[next].finally(() => loading(null));
+    }
+    // Only the second walk has someone behind the door; wait for that frame, never longer.
+    if (from.id === 'door' && state.walk.pending && state.walk.index === 1) await extraOf(state.walk, 'scare', 8000);
     const scare = state.walk.scare?.after === from.id ? state.walk.scare : null;
     if (from.id === 'door') await openDoor(spot);
+    closeDoorGap();
     if (scare) {
       // The door opens onto the corridor where you started, and someone is in it.
       await jumpScare(scare.photo);
-      closeDoorGap();
       state.sceneIndex = next;
       await arriveAt(scene);
     } else {
       await stepInto(scene);
-      closeDoorGap();
       state.sceneIndex = next;
     }
     render(scene);
@@ -1093,14 +1753,17 @@ async function rollCall(scene) {
     await pause(2500);
     tvStatic(scene, true);
     await announce(state.lang === 'zh' ? `${name}。` : `${name}.`);
-    await pause(700);
-    await voice.speak(`${name}？`, state.lang);
+    await pause(900);
+    // The second time, slowly, one sound at a time.
+    await voice.speak(state.lang === 'zh' ? `${[...name].join('，')}？` : `${name}?`, state.lang, { slow: true });
     roll.hidden = false;
     say(t('rollCall'));
     let answer = await waitForAnswer(9000);
+    let calls = 1;
     if (!answer.heard) {
       await voice.speak(`${name}？`, state.lang, { louder: true });
       answer = await waitForAnswer(9000);
+      calls = 2;
     } else if (answer.recording && state.live) {
       const words = await transcribe(answer.recording, 'answer').catch(() => '');
       if (words && !ANSWER.test(words)) {
@@ -1112,10 +1775,13 @@ async function rollCall(scene) {
     }
     roll.hidden = true;
     say('');
+    Object.assign(state.stats, { answered: Boolean(answer.heard), delay: Math.round(answer.after ?? 0), calls, spoken: Boolean(answer.spoken) });
+    state.report = requestReport(); // written while the class turns around
     tvStatic(scene, false);
     state.audio?.silence(true);
     await pause(1400);
     state.audio?.silence(false);
+    await extraOf(state.walk, 'scare', 25000);
     const scare = state.walk.scare;
     if (scare?.kind === 'turn') await theyTurn(scare.photo);
     else if (scare) await jumpScare(scare.photo);
@@ -1142,6 +1808,7 @@ async function rollCall(scene) {
 
 // Resolves when the player answers: out loud (heard by the microphone) or with the button.
 function waitForAnswer(ms) {
+  const asked = performance.now();
   return new Promise((resolve) => {
     const button = $('#roll-here');
     let done = false;
@@ -1152,9 +1819,9 @@ function waitForAnswer(ms) {
       listening.cancel();
       resolve(result);
     };
-    button.onclick = () => finishWith({ heard: true, recording: null });
+    button.onclick = () => finishWith({ heard: true, recording: null, spoken: false, after: (performance.now() - asked) / 1000 });
     const listening = voice.listen({ ms, record: state.live });
-    listening.result.then((result) => finishWith(result));
+    listening.result.then((result) => finishWith({ ...result, spoken: Boolean(result.heard), after: (performance.now() - asked) / 1000 }));
   });
 }
 
@@ -1219,24 +1886,55 @@ function bookDate() {
 }
 
 function renderBook() {
-  return drawContactBook($('#book'), { ...state.ending, scores: state.bible?.scores, name: state.name, date: bookDate(), lang: state.lang }, $('#hide-name').checked);
+  const report = state.reportText ?? {};
+  return drawContactBook(
+    $('#book'),
+    { ...state.ending, ...report, comment_en: state.lang === 'en' ? report.comment : state.ending.comment_en, scores: state.bible?.scores, name: state.name, date: bookDate(), lang: state.lang },
+    $('#hide-name').checked,
+  );
 }
 
+// The afternoon after. The teacher watches from the door while the credits roll; when
+// they end, nobody is there. Then the title, and below it tonight's contact book.
 function finish() {
   state.audio?.night('off');
   return guarded(t('bellWait'), async () => {
-    state.ending = await api('/api/ending', { schoolId: state.schoolId });
+    const [ending, report] = await Promise.all([api('/api/ending', { schoolId: state.schoolId }), state.report ?? requestReport()]);
+    state.ending = ending;
+    state.reportText = report;
     show('ending-screen');
     const daylight = $('#daylight');
-    daylight.src = state.ending.daylight;
+    const empty = $('#daylight-empty');
+    daylight.src = ending.daylight;
     daylight.alt = t('alt_daylight');
+    empty.src = ending.daylightEmpty || ending.daylight;
+    empty.alt = t('alt_daylight');
+    empty.style.opacity = '0';
+    $('#end-title').hidden = true;
+    $('#report').hidden = true;
     $('#ending-line').textContent = t('ending');
     $('#hide-label').textContent = t('hide');
     $('#download').textContent = t('download');
     $('#again').textContent = t('again');
+    $('#home').textContent = t('home');
     applySound('none');
     await renderBook();
-    setTimeout(rollCredits, 14000);
+    await pause(5000);
+    await rollCredits();
+    // Gone. Then the room goes dark, and the title comes back as it was at the start.
+    await empty.animate([{ opacity: 0 }, { opacity: 1 }], { duration: REDUCED_MOTION ? 1 : 2200, easing: 'ease-in-out', fill: 'forwards' }).finished;
+    await pause(1600);
+    const frame = $('#daylight-frame');
+    await frame.animate([{ opacity: 1 }, { opacity: 0 }], { duration: REDUCED_MOTION ? 1 : 1800, easing: 'ease-in', fill: 'forwards' }).finished;
+    frame.hidden = true;
+    $('#ending-line').hidden = true;
+    const title = $('#end-title');
+    title.hidden = false;
+    title.animate([{ opacity: 0 }, { opacity: 1 }], { duration: REDUCED_MOTION ? 1 : 2000, fill: 'forwards' });
+    await pause(2400);
+    const page = $('#report');
+    page.hidden = false;
+    page.animate([{ opacity: 0, transform: 'translateY(12px)' }, { opacity: 1, transform: 'none' }], { duration: REDUCED_MOTION ? 1 : 1200, fill: 'forwards' }); // below the title; you scroll to it
   });
 }
 
@@ -1244,7 +1942,7 @@ function finish() {
 let creditsRolled = false;
 
 function rollCredits() {
-  if (creditsRolled || $('#ending-screen').hidden) return;
+  if (creditsRolled || $('#ending-screen').hidden) return Promise.resolve();
   creditsRolled = true;
   const layer = $('#credits');
   const list = $('#credits-list');
@@ -1264,12 +1962,16 @@ function rollCredits() {
   const roll = REDUCED_MOTION
     ? null
     : list.animate([{ transform: 'translateY(100vh)' }, { transform: 'translateY(-100%)' }], { duration: 30000, easing: 'linear', fill: 'forwards' });
-  const close = () => {
-    roll?.cancel();
-    layer.hidden = true;
-  };
-  layer.onclick = close;
-  if (roll) roll.finished.then(close, () => {});
+  return new Promise((resolve) => {
+    const close = () => {
+      roll?.cancel();
+      layer.hidden = true;
+      resolve();
+    };
+    layer.onclick = close;
+    if (roll) roll.finished.then(close, () => {});
+    else setTimeout(close, 8000);
+  });
 }
 
 $('#hide-name').addEventListener('change', renderBook);
@@ -1287,6 +1989,7 @@ $('#download').addEventListener('click', () => {
 });
 
 $('#again').addEventListener('click', () => location.reload());
+$('#home').addEventListener('click', () => location.assign(location.pathname));
 
 $('#name').addEventListener('input', () => {
   $('#duty-name').textContent = $('#name').value.trim() || '＿＿＿';
@@ -1324,21 +2027,119 @@ function setupDictation() {
 // ---------- start ----------
 
 // While the school is remembered: the speaker sends everyone home, then the first line.
-async function intro() {
+// While the school is remembered: the speaker sends everyone home, your memories come
+// back one at a time, and the year rolls back to yours. Then the first line.
+const INTRO_MS = 22000; // about how long this takes; the server waits this long for the best corridor
+
+async function intro(memories, year) {
   const layer = $('#intro');
+  const line = $('#intro-line');
   layer.hidden = false;
-  $('#intro-line').textContent = '';
+  line.textContent = '';
   await pause(600);
-  typeLine($('#intro-line'), t('paHome'));
+  typeLine(line, t('paHome'));
   await announce(t('paHome'));
-  await pause(800);
-  typeLine($('#intro-line'), t('firstLine'));
-  await pause(3600);
+  await pause(700);
+  for (const memory of memories) {
+    typeLine(line, memory);
+    state.audio?.chalk?.(0.5);
+    await pause(Math.min(4200, 1400 + [...memory].length * 140));
+  }
+  if (year) {
+    // The years roll back to yours.
+    const from = new Date().getFullYear();
+    const steps = Math.max(1, from - year);
+    for (let y = from; y > year; y--) {
+      line.textContent = String(y);
+      await pause(Math.min(260, 3200 / steps));
+    }
+    typeLine(line, state.lang === 'zh' ? `${year} 年。` : `${year}.`);
+    await pause(1800);
+  }
+  typeLine(line, t('firstLine'));
+  await pause(3200);
+}
+
+// What the player did tonight, for the contact book: no name, only actions and times.
+const newStats = () => ({ start: Date.now(), locked: 0, kept: [], erased: [], place: {}, here: null, since: 0, answered: false, delay: 0, calls: 1, spoken: false });
+
+function trackPlace(id) {
+  const stats = state.stats;
+  if (!stats) return;
+  const now = Date.now();
+  if (stats.here) stats.place[stats.here] = (stats.place[stats.here] ?? 0) + (now - stats.since);
+  stats.here = id;
+  stats.since = now;
+}
+
+function playedFacts() {
+  trackPlace(state.stats.here);
+  const st = state.stats;
+  const longest = Object.entries(st.place).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'corridor';
+  return { answered: st.answered, delay: st.delay, calls: st.calls, spoken: st.spoken, locked: st.locked, longest, minutes: Math.max(1, Math.round((Date.now() - st.start) / 60000)), kept: st.kept, erased: st.erased };
+}
+
+const PLACE = { zh: { corridor: '走廊', door: '教室門口', classroom: '教室', office: '辦公室' }, en: { corridor: 'the corridor', door: 'the classroom door', classroom: 'the classroom', office: "the teachers' office" } };
+
+// The contact book from the facts alone (the replay, or when Muse Spark is not there).
+function factsReport(f) {
+  const zh = state.lang === 'zh';
+  const quote = (list) => list.filter(Boolean).map((x) => (zh ? `「${x}」` : `“${x}”`)).join(zh ? '' : ', ');
+  const roll = f.answered
+    ? zh
+      ? `點名：${f.delay} 秒後答「有」${f.calls > 1 ? '（叫了兩次）' : ''}`
+      : `Roll call: answered after ${f.delay}s${f.calls > 1 ? ' (called twice)' : ''}`
+    : zh
+      ? '點名：沒有回答'
+      : 'Roll call: no answer';
+  const record = [
+    `${zh ? '擦掉：' : 'Erased: '}${quote(f.erased)}`,
+    `${zh ? '留下：' : 'Kept: '}${quote(f.kept)}`,
+    roll,
+    f.locked ? (zh ? `試開鎖住的門：${f.locked} 扇` : `Locked doors tried: ${f.locked}`) : '',
+    zh ? `待最久：${PLACE.zh[f.longest]}` : `Stayed longest: ${PLACE.en[f.longest]}`,
+  ].filter(Boolean);
+  const kept = f.kept[f.kept.length - 1] ?? '';
+  const erased = f.erased[0] ?? '';
+  const answer = !f.answered
+    ? zh ? '點名的時候你沒有回答。老師還是把你的名字寫上去了。' : 'You did not answer the roll call. I wrote your name down anyway.'
+    : f.delay > 4 || f.calls > 1
+      ? zh ? '你過了很久才回答。沒關係，老師一直都知道你在。' : 'You took a long time to answer. It is all right. I always knew you were there.'
+      : zh ? '你回答得很快，好像一直在等人叫你的名字。' : 'You answered at once, as if you had been waiting for someone to say your name.';
+  return {
+    record: record.join(zh ? '。' : '. ') + (zh ? '。' : '.'),
+    diary: zh
+      ? `今天我是值日生。我擦掉了${quote(f.erased)}，留下了${quote(f.kept)}。${f.answered ? `點名的時候，我過了${f.delay}秒才說有。` : '點名的時候，我沒有說話。'}`
+      : `Today I was on duty. I erased ${quote(f.erased)} and kept ${quote(f.kept)}. ${f.answered ? `At roll call I took ${f.delay} seconds to say here.` : 'At roll call I said nothing.'}`,
+    comment: `${erased && kept ? (zh ? `你擦掉了「${erased}」，卻留下了「${kept}」。` : `You wiped away “${erased}” and kept “${kept}”. `) : ''}${answer}`,
+    comment_en: '',
+    bring: zh ? '紅色水桶' : 'The red bucket.',
+  };
+}
+
+function requestReport() {
+  const facts = playedFacts();
+  const local = factsReport(facts);
+  if (REPLAY_SRC || !state.live) return Promise.resolve(local);
+  const { kept, erased, ...stats } = facts;
+  return api('/api/report', { schoolId: state.schoolId, stats })
+    .then((written) => {
+      const en = state.lang === 'en';
+      const pick = (zh, english) => (en ? written[english] || written[zh] : written[zh]);
+      return {
+        ...local,
+        diary: pick('diary', 'diary_en') || local.diary,
+        comment: pick('comment', 'comment_en') || local.comment,
+        bring: pick('bring', 'bring_en') || local.bring,
+      };
+    })
+    .catch(() => local);
 }
 
 $('#start-form').addEventListener('submit', (event) => {
   event.preventDefault();
   if (state.busy) return;
+  state.stats = newStats();
   state.name = $('#name').value.trim();
   const memories = ['#m1', '#m2', '#m3'].map((id) => $(id).value.trim()).filter(Boolean);
   const year = Number($('#year').value) || undefined;
@@ -1348,15 +2149,16 @@ $('#start-form').addEventListener('submit', (event) => {
   showError('');
   show('walk-screen');
   $('#stage').classList.add('blackout');
-  const school = api('/api/school', { memories, lang: state.lang, year }); // the name is not sent
+  const school = api('/api/school', { memories, lang: state.lang, year, patience: INTRO_MS }); // the name is not sent
   school.catch(() => {});
-  intro()
+  intro(memories, year)
     .then(async () => {
       loading(t('remembering'));
       const res = await school;
       state.schoolId = res.schoolId;
       state.draws = res.draws;
       state.bible = res.bible;
+      fillWalk(res.walk);
       state.shownYear = null;
       $('#intro').hidden = true;
       loading(null);

@@ -71,7 +71,9 @@
         <div id="board-name" hidden></div>
         <div id="board-choices" hidden></div>
         <div id="door-gap" aria-hidden="true" hidden></div>
-        <div id="ball" aria-hidden="true" hidden></div>
+        <div id="door-leaf" aria-hidden="true" hidden></div>
+        <div id="ball-shadow" aria-hidden="true" hidden></div>
+        <canvas id="ball" width="96" height="96" aria-hidden="true" hidden></canvas>
         <div id="hotspots"></div>
         <img id="scare" alt="" aria-hidden="true" hidden>
         <div id="date-stamp" aria-hidden="true"></div>
@@ -87,13 +89,20 @@
     </section>
 
     <section id="ending-screen" class="screen" hidden>
-      <img id="daylight" alt="">
+      <div id="daylight-frame">
+        <img id="daylight" alt="">
+        <img id="daylight-empty" alt="">
+      </div>
+      <h1 id="end-title" aria-label="值日生, Last One Out" hidden><span class="zh">值日生</span><span class="en">LAST ONE OUT</span></h1>
       <p id="ending-line"></p>
-      <canvas id="book" width="1080" height="1450"></canvas>
-      <div class="row">
-        <label><input type="checkbox" id="hide-name"> <span id="hide-label"></span></label>
-        <button id="download" type="button"></button>
-        <button id="again" type="button"></button>
+      <div id="report" hidden>
+        <canvas id="book" width="1080" height="1450"></canvas>
+        <div class="row">
+          <label><input type="checkbox" id="hide-name"> <span id="hide-label"></span></label>
+          <button id="download" type="button"></button>
+          <button id="again" type="button"></button>
+          <button id="home" type="button"></button>
+        </div>
       </div>
     </section>
 

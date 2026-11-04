@@ -58,8 +58,13 @@ export function createVoice() {
     const local = voices.filter((v) => v.localService && want.test(v.lang));
     const fallback = lang === 'zh' ? voices.filter((v) => v.localService && /^zh/i.test(v.lang)) : [];
     const pool = local.length ? local : fallback;
-    const preferred = lang === 'zh' ? /Meijia|美佳/ : /Samantha|Daniel|Karen|Moira|Serena/;
-    return pool.find((v) => preferred.test(v.name)) ?? pool[0] ?? null;
+    // An old man's voice on the school speaker (macOS: Grandpa); otherwise the usual one.
+    const preferred = lang === 'zh' ? [/^Grandpa/, /Meijia|美佳/] : [/^Grandpa/, /Daniel|Samantha|Karen|Moira|Serena/];
+    for (const like of preferred) {
+      const found = pool.find((v) => like.test(v.name));
+      if (found) return found;
+    }
+    return pool[0] ?? null;
   }
 
   async function open() {
@@ -82,7 +87,7 @@ export function createVoice() {
     },
 
     // Resolves when the line has been spoken (or would have been). false = no local voice.
-    async speak(text, lang, { louder = false } = {}) {
+    async speak(text, lang, { louder = false, slow = false } = {}) {
       const voice = synth && pick(lang);
       if (!voice) {
         await pause(900 + [...text].length * 90);
@@ -92,8 +97,9 @@ export function createVoice() {
       const line = new SpeechSynthesisUtterance(text);
       line.voice = voice;
       line.lang = voice.lang;
-      line.rate = lang === 'zh' ? 0.8 : 0.82;
-      line.pitch = 0.75;
+      const old = /^Grandpa/.test(voice.name); // already low; lowering it more sounds broken
+      line.rate = (lang === 'zh' ? 0.8 : 0.82) * (slow ? 0.8 : 1);
+      line.pitch = (old ? 0.95 : 0.75) * (slow ? 0.85 : 1);
       line.volume = louder ? 1 : 0.8;
       await new Promise((resolve) => {
         const timer = setTimeout(resolve, 2500 + [...text].length * 350);

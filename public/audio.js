@@ -179,6 +179,77 @@ export function createAudio() {
     source.stop(t + 2.8);
   }
 
+  // A basketball: each bounce is a deep thump, the ring of the air inside and the slap of
+  // leather; then it rolls, a low rumble that beats with each turn of its seams.
+  // path: [{ t, x, z, speed }] in seconds and metres from you; contacts: bounce times.
+  function basketball({ path, contacts }) {
+    const start = ctx.currentTime + 0.05;
+    const out = placed(path[0].x, -1.2, -path[0].z);
+    const times = path.map((p) => p.t);
+    const end = times[times.length - 1];
+    const curve = (pick) => new Float32Array(path.map(pick));
+    out.positionX.setValueCurveAtTime(curve((p) => p.x), start, end);
+    out.positionZ.setValueCurveAtTime(curve((p) => -p.z), start, end);
+    contacts.forEach((at, i) => {
+      const t = start + at;
+      const level = 0.55 * Math.pow(0.7, i);
+      const thump = ctx.createOscillator();
+      thump.frequency.setValueAtTime(140, t);
+      thump.frequency.exponentialRampToValueAtTime(68, t + 0.07);
+      const thumpEnv = ctx.createGain();
+      thumpEnv.gain.setValueAtTime(0, t);
+      thumpEnv.gain.linearRampToValueAtTime(level, t + 0.002);
+      thumpEnv.gain.exponentialRampToValueAtTime(0.0005, t + 0.16);
+      thump.connect(thumpEnv);
+      thumpEnv.connect(out);
+      thump.start(t);
+      thump.stop(t + 0.2);
+      const ring = ctx.createOscillator();
+      ring.frequency.setValueAtTime(560, t);
+      ring.frequency.exponentialRampToValueAtTime(500, t + 0.2);
+      const ringEnv = ctx.createGain();
+      ringEnv.gain.setValueAtTime(0, t);
+      ringEnv.gain.linearRampToValueAtTime(level * 0.16, t + 0.004);
+      ringEnv.gain.exponentialRampToValueAtTime(0.0005, t + 0.22);
+      ring.connect(ringEnv);
+      ringEnv.connect(out);
+      ring.start(t);
+      ring.stop(t + 0.25);
+      burst(t, { type: 'highpass', freq: 2600, q: 0.7, peak: level * 0.35, decay: 0.03, out });
+    });
+    // Rolling: the rumble beats once per turn (0.24 m across: one turn per 0.75 m).
+    const rollFrom = start + (contacts[contacts.length - 1] ?? 0) + 0.08;
+    const source = ctx.createBufferSource();
+    source.buffer = noise;
+    source.loop = true;
+    const band = ctx.createBiquadFilter();
+    band.type = 'bandpass';
+    band.frequency.value = 260;
+    band.Q.value = 0.9;
+    const beat = ctx.createGain();
+    beat.gain.value = 0.55;
+    const lfo = ctx.createOscillator();
+    const depth = ctx.createGain();
+    depth.gain.value = 0.45;
+    lfo.connect(depth);
+    depth.connect(beat.gain);
+    lfo.frequency.setValueCurveAtTime(curve((p) => Math.max(0.05, p.speed / 0.754)), start, end);
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0, start);
+    env.gain.setValueAtTime(0, rollFrom);
+    env.gain.linearRampToValueAtTime(0.22, rollFrom + 0.3);
+    env.gain.setValueAtTime(0.22, start + end * 0.7);
+    env.gain.linearRampToValueAtTime(0.0005, start + end);
+    source.connect(band);
+    band.connect(beat);
+    beat.connect(env);
+    env.connect(out);
+    source.start(start);
+    lfo.start(start);
+    source.stop(start + end + 0.1);
+    lfo.stop(start + end + 0.1);
+  }
+
   // Chalk on a board: scratchy strokes with the odd squeak.
   function chalk(seconds = 1.2) {
     const start = ctx.currentTime + 0.02;
@@ -796,6 +867,10 @@ export function createAudio() {
     ball() {
       resume();
       ball();
+    },
+    basketball(run) {
+      resume();
+      basketball(run);
     },
     chalk(seconds) {
       resume();
