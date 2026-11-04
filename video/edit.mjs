@@ -88,7 +88,7 @@ function beats() {
     if (erases.filter((t) => t >= a && t < b).length >= 2) what.push('three chalk lines: the player erases two, the kept one is rewritten');
     return [...what, ...(said.length ? [`lines under the photo: ${said.join(' / ')}`] : [])].join('; ') || 'walking';
   };
-  list.push({ id: 'title', start: Math.max(0, walkStart - 7), end: walkStart + 0.3, about: 'the title screen: name, year and three memories typed in' });
+  // (no title-screen beat: the trailer never shows typing into the form)
   list.push({ id: 'intro', start: walkStart, end: Math.max(walkStart + 3, firstPhotoAt - 0.3), about: describe(walkStart, firstPhotoAt) + '; text on black before the first photo' });
   // (starts just after the photo appears: not a frame of the intro text on black)
   list.push({ id: 'arrive', start: firstPhotoAt + 0.05, end: (forward[0] ?? firstPhotoAt + 8) + 1.2, about: describe(firstPhotoAt - 0.5, forward[0] ?? firstPhotoAt + 8) + ' (the first photo of the school)' });
@@ -137,7 +137,7 @@ async function pick() {
   if (!key) throw new Error('no MODEL_API_KEY in .env');
   const prompt = `You are cutting the first minute of the demo video for "Last One Out", a quiet horror game.
 In Taiwan, the student on duty is the last one out. The player types three memories and a year; Meta's models photograph a night school from them; the player walks into the photos in 3D, three times; each time they erase two of three chalk lines and the school changes around the one they kept; a teacher in a cracked porcelain mask waits behind a door; on the last walk a basketball rolls to their feet; the classroom is full of figures with their backs turned; the speaker calls their name, they answer, every head turns; then the afternoon after, the credits and a page of a Taiwanese contact book.
-This is one playthrough of the judges' replay, ${LENGTH.toFixed(0)} seconds: a night that was played live, with every photo made by Meta's models during that game. In the replay the memories and the year are fixed; the player only types a name ("unknown").
+This is one playthrough of the judges' replay, ${LENGTH.toFixed(0)} seconds: a night that was played live, with every photo made by Meta's models during that game. In the judges' version the year and the three memories are fixed; the player types or records a name.
 
 The recording is split into beats. Each beat starts when the player steps forward and ends just after the next step, so every beat starts and ends on a movement:
 ${list.map((b) => `${b.id}: ${b.start}-${b.end}s (${b.seconds}s) — ${b.about}`).join('\n')}
@@ -146,7 +146,7 @@ The contact sheets show frames of each beat, labelled with the beat id and time.
 
 Make a trailer of 70 to 85 seconds of footage, in story order, that a stranger can follow: they should understand what the player does and what happens.
 - Choose 6 to 8 beats and let each one play long enough to see what happens and to read the line under the photo, at least 7 seconds each. You may trim a beat to a sub-range with "from" and "to" (seconds). Cut points that fall inside a line under the photo, a speaker announcement or a scare are moved to its edge afterwards. Keep these whole: the chalkboard choice (both erasures and the kept line being rewritten), the teacher scare, the basketball rolling to the player's feet, and the roll call through every head turning.
-- Write 4 title cards. Each is shown full screen for about 5 seconds BEFORE a beat ("before": beat id), words in dry-brush handwriting on black, fading in and out. Each card plainly tells the viewer what they are about to see the player do or face (for example what the chalkboard choice is), so the trailer can be understood without playing. Grammatical, natural English a native speaker would write for a film trailer (with articles and apostrophes, e.g. "the teachers' office"), at most 8 words, no exclamation marks, never repeating a line the game shows, never giving a scare away. Do not mention typing memories: in this replay they are fixed.
+- Write 4 title cards. Each is shown full screen for about 5 seconds BEFORE a beat ("before": beat id), words in dry-brush handwriting on black, fading in and out. Each card plainly tells the viewer what they are about to see the player do or face (for example what the chalkboard choice is), so the trailer can be understood without playing. Grammatical, natural English a native speaker would write for a film trailer (with articles and apostrophes, e.g. "the teachers' office"), at most 8 words, no exclamation marks, never repeating a line the game shows, never giving a scare away. Never suggest that the player types the memories or the year: in the judges' version they are fixed.
 Answer with JSON only: {"shots":[{"beat":"b3","from":12.0,"to":19.5}],"titles":[{"before":"b3","text":"..."}]}`;
   const content = [{ type: 'text', text: prompt }, ...sheets.map((f) => ({ type: 'image_url', image_url: { url: `data:image/jpeg;base64,${readFileSync(f).toString('base64')}` } }))];
   // Muse Spark reasons first and the reasoning counts towards the limit: allow plenty, and
@@ -314,11 +314,11 @@ async function build() {
     parts.push(seg('gen-b', walkAt, photoAt - 0.6, 8, capB, true));
     parts.push(seg('gen-c', photoAt - 0.6, photoAt + 3.6, 1, capB, false));
   }
-  parts.push(card(join(C, '1-bible.png'), 7.5, 'c1'));
+  parts.push(card(join(C, '1-bible.png'), 8, 'c1'));
   parts.push(card(join(C, '2-depth.png'), 7, 'c2'));
-  parts.push(card(join(C, '3-sam.png'), 7.5, 'c3'));
+  parts.push(card(join(C, '3-sam.png'), 8, 'c3'));
   parts.push(card(join(C, '4-edit.png'), 9, 'c4'));
-  parts.push(card(join(C, '5-voice.png'), 6, 'c5'));
+  parts.push(card(join(C, '5-voice.png'), 6.5, 'c5'));
   parts.push(card(join(C, '6-book.png'), 8, 'c6'));
 
   // 4. the end card
@@ -331,7 +331,7 @@ async function build() {
     <div style="font:italic 400 34px 'IM Fell English';color:#e6dfcf">Next: walk into it on Meta Quest (planned)</div>
     <div style="font:400 25px 'Courier Prime';color:#9d978a;max-width:1450px;line-height:1.5">Recorded from the replay at the link above: one night played live, every photo made by Meta's models.<br>Muse Spark watched the recording and chose the trailer's shots and title cards.</div>
     <div style="font:400 25px 'Courier Prime';color:#9d978a">Built during the Meta Global AI Developer Hackathon, Oct 27 – Nov 4, 2026 · JO TUNG WU</div></div>`, end);
-  parts.push(card(end, 6.5, 'end', 0.015));
+  parts.push(card(end, 7, 'end', 0.015));
   await browser.close();
 
   // Decode every part on its own and join with the concat filter (stream copy breaks on
