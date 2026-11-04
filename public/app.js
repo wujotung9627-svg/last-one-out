@@ -634,8 +634,9 @@ async function placeName(scene, sharp = false) {
   label.className = 'vertical';
   const zh = state.lang === 'zh';
   const chars = [...`${t('onDuty')}  ${state.name}`].length * (zh ? 1 : 0.66);
-  at(BW * 0.9, BH * 0.06, BW * 0.08, BH * 0.88);
-  label.style.fontSize = `${Math.max(8, Math.min(BW * 0.055, (BH * 0.88) / (chars + 1)))}px`;
+  // Only the top of the column: below it, the heads of a seated class would cover it.
+  at(BW * 0.9, BH * 0.05, BW * 0.08, BH * 0.55);
+  label.style.fontSize = `${Math.max(8, Math.min(BW * 0.055, (BH * 0.55) / (chars + 1)))}px`;
   label.replaceChildren(el('span', zh ? t('onDuty') : `${t('onDuty')}:`), el('span', state.name, 'who'));
   const blur = sharp ? 0 : BLUR_BY_WALK[Math.min(state.walk.index, BLUR_BY_WALK.length - 1)];
   label.style.filter = blur ? `blur(${blur}px)` : 'none';
