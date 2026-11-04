@@ -176,7 +176,7 @@ function mustKeep() {
   const turn = roll ? scares.find(([s]) => s > roll[0]) : null;
   if (roll) keep.push([roll[0] - 3.5, (turn ?? roll)[1] + 1.0]);
   for (const sc of scares) if (!roll || sc[0] < roll[0]) keep.push([sc[0] - 2.5, sc[1] + 0.6]);
-  for (const [b0, b1] of balls) keep.push([b0 - 1.0, Math.min(b1, b0 + 7)]); // the ball rolling to your feet
+  for (const [b0, b1] of balls) keep.push([b0 - 1.0, b0 + 9.5]); // the ball rolling to your feet, then the figure rushing at you
   // each chalkboard choice: both erasures and the kept line being rewritten
   // (kept whole only when the shot already reaches into it: a second board can be left out)
   for (let i = 0; i + 1 < erases.length; i++) if (erases[i + 1] - erases[i] < 8) keep.push([erases[i] - 2.5, erases[i + 1] + 4.5, 'board']), i++;
@@ -306,7 +306,7 @@ async function build() {
   ff(...parts.flatMap((p) => ['-i', p]), '-filter_complex', graph, '-map', '[v]', '-map', '[a]', ...ENC, joined);
   // Quiet horror sound with loud stings: lift it and let a limiter catch the stings.
   const final = join(REC, 'demo.mp4');
-  ff('-i', joined, '-c:v', 'copy', '-af', 'volume=3dB,alimiter=limit=0.7:attack=1:release=60:level=false', '-c:a', 'aac', '-b:a', '256k', '-ar', '48000', final);
+  ff('-i', joined, '-c:v', 'copy', '-af', 'volume=3dB,alimiter=limit=0.56:attack=1:release=60:level=false', '-c:a', 'aac', '-b:a', '256k', '-ar', '48000', final);
   console.log('demo', final, probe(final).toFixed(1), 's');
 }
 
