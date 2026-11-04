@@ -490,7 +490,11 @@ function applySound(sound) {
   if (sound === 'chair') setTimeout(() => state.audio.chair(), 2200);
   if (sound === 'papers') setTimeout(() => state.audio.papers(), 2400);
   if (sound === 'speaker') setTimeout(() => state.audio.speaker(), 3000);
-  if (sound === 'water') [1800, 3100, 3900, 6200].forEach((ms) => setTimeout(() => state.audio.drip(), ms));
+  // Water: the corridor's taps drip faster and louder, while you are there (only the
+  // corridor has taps).
+  if (sound === 'water')
+    for (let ms = 1500; ms < 26000; ms += 650 + Math.random() * 750)
+      setTimeout(() => currentScene()?.id === 'corridor' && state.audio.drip(0.3), ms);
   if (sound === 'giggle') setTimeout(() => state.audio.giggle(), 2800);
   if (sound === 'running') setTimeout(() => state.audio.runPast(), 2500);
 }
@@ -537,7 +541,7 @@ const boxOverlap = (a, b) => {
 // Not a way through: a sliver at the very edge of the picture (a door frame cut off by
 // the frame), or a door too small or too high up to walk through (a cupboard door).
 const walkable = (b, sceneId) =>
-  !((b.x < 0.01 || b.x + b.w > 0.99) && b.w < 0.06) && (sceneId === 'door' || (b.h >= 0.18 && b.y + b.h >= 0.45));
+  !((b.x < 0.01 || b.x + b.w > 0.99) && b.w < 0.06) && (sceneId === 'door' || (b.h >= (sceneId === 'corridor' ? 0.25 : 0.18) && b.y + b.h >= 0.45));
 
 function doorsOf(scene) {
   if (scene.doorList) return scene.doorList;
@@ -613,27 +617,24 @@ const BLUR_BY_WALK = [2.4, 1.8, 1.4];
 
 async function placeName(scene, sharp = false) {
   const label = $('#board-name');
+  await sortBoards(scene);
   if (scene.id !== 'classroom' || !scene.board || !state.name) {
     label.hidden = true;
     return;
   }
   const { BW, BH, transform } = await boardPlane(scene);
   if (!sameScene(currentScene(), scene)) return;
-  label.className = state.lang === 'zh' ? 'vertical' : '';
   // Laid on the board's surface: a spot on it (x, y, w, h in board pixels).
   const at = (x, y, width, height) =>
-    Object.assign(label.style, { left: '0', top: '0', width: `${width}px`, height: height ? `${height}px` : 'auto', transformOrigin: '0 0', transform: `${transform} translate(${x}px, ${y}px)` });
-  if (state.lang === 'zh') {
-    // The narrow column at the board's right edge, written top to bottom.
-    const chars = [...`${t('onDuty')}　${state.name}`].length;
-    at(BW * 0.9, BH * 0.06, BW * 0.08, BH * 0.88);
-    label.style.fontSize = `${Math.max(8, Math.min(BW * 0.055, (BH * 0.88) / (chars + 1)))}px`;
-    label.replaceChildren(el('span', t('onDuty')), el('span', state.name, 'who'));
-  } else {
-    at(BW * 0.66, BH * 0.78, BW * 0.32, 0);
-    label.style.fontSize = `${Math.max(8, BH * 0.1)}px`;
-    label.replaceChildren(el('span', `${t('onDuty')}: `), el('span', state.name, 'who'));
-  }
+    Object.assign(label.style, { left: '0', top: '0', width: `${width}px`, height: `${height}px`, transformOrigin: '0 0', transform: `${transform} translate(${x}px, ${y}px)` });
+  // The narrow column at the board's right edge, where the student on duty is written,
+  // top to bottom, in either language (English lies on its side, as it would there).
+  label.className = 'vertical';
+  const zh = state.lang === 'zh';
+  const chars = [...`${t('onDuty')}  ${state.name}`].length * (zh ? 1 : 0.66);
+  at(BW * 0.9, BH * 0.06, BW * 0.08, BH * 0.88);
+  label.style.fontSize = `${Math.max(8, Math.min(BW * 0.055, (BH * 0.88) / (chars + 1)))}px`;
+  label.replaceChildren(el('span', zh ? t('onDuty') : `${t('onDuty')}:`), el('span', state.name, 'who'));
   const blur = sharp ? 0 : BLUR_BY_WALK[Math.min(state.walk.index, BLUR_BY_WALK.length - 1)];
   label.style.filter = blur ? `blur(${blur}px)` : 'none';
   label.hidden = false;
@@ -1015,11 +1016,20 @@ async function boxLight(url, b) {
 }
 
 // Once per place: if SAM swapped the chalkboard and the cork board, swap them back.
-async function sortBoards(scene) {
-  if (scene.boardsChecked || !scene.board || !scene.notice) return;
-  scene.boardsChecked = true;
-  const [board, notice] = await Promise.all([boxLight(scene.photo, scene.board), boxLight(scene.photo, scene.notice)]).catch(() => [0, 1]);
-  if (board > notice + 0.08) [scene.board, scene.notice] = [scene.notice, scene.board];
+// Checked once per place, and everyone waits for the same check: the lines, the name
+// and the ranking were placed before it finished, on the wrong board, and then jumped.
+function sortBoards(scene) {
+  if (!scene.board || !scene.notice) return Promise.resolve();
+  if (!scene.boardsSorted) {
+    const { board, notice } = scene;
+    const sorted = Promise.all([boxLight(scene.photo, board), boxLight(scene.photo, notice)])
+      .catch(() => [0, 1])
+      .then(([dark, light]) => {
+        if (dark > light + 0.08) [scene.board, scene.notice] = [notice, board];
+      });
+    Object.defineProperty(scene, 'boardsSorted', { value: sorted, enumerable: false });
+  }
+  return scene.boardsSorted;
 }
 
 async function placeChoices(scene) {
@@ -1061,13 +1071,15 @@ async function placeChoices(scene) {
 
 function fitKeptLine(line, board, text) {
   const { BW, BH } = $('#board-choices').plane ?? { BW: 900, BH: 300 };
-  const width = BW * 0.9;
+  const width = BW * 0.78; // clear of the column at the right edge, where the name goes
   const cjk = /[㐀-鿿]/.test(text);
   const ems = [...text].length * (cjk ? 1.05 : 0.5);
   const size = Math.max(8, Math.min(BH * 0.2, (width * 2) / Math.max(ems, 1), (width / Math.max(ems, 1)) * 1.6));
+  // It stays on its own row (only kept clear of the board's edges), so it never jumps.
+  const row = parseFloat(line.style.top) || 45;
   Object.assign(line.style, {
-    top: '42%',
-    maxWidth: '90%',
+    top: `${Math.min(65, Math.max(30, row))}%`,
+    maxWidth: '80%',
     fontSize: `${size}px`,
     whiteSpace: 'normal',
     lineHeight: '1.25',
@@ -1621,7 +1633,10 @@ async function measureOpening(scene, url) {
   const median = Float32Array.from(diff).sort()[diff.length >> 1];
   const changed = (i) => diff[i] > Math.max(24, median * 3);
   const seen = new Uint8Array(W * H);
-  const doors = (scene.doors ?? []).filter((d) => doorLike(d, true));
+  // Only a door about as big as the main one: a cupboard beside it never opens.
+  const all = (scene.doors ?? []).filter((d) => doorLike(d, true));
+  const main = Math.max(0, ...all.map((d) => d.w * d.h));
+  const doors = all.filter((d) => d.w * d.h >= main * 0.5);
   let best = null;
   for (let start = 0; start < W * H; start++) {
     if (seen[start] || !changed(start)) continue;

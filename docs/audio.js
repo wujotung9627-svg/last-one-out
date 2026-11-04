@@ -370,21 +370,26 @@ export function createAudio() {
     voice.stop(start + 1.55);
   }
 
-  // A drop of water falling into the bucket or a puddle.
-  function drip() {
+  // A drop of water: a tiny click as it lands, then the ring of the little bubble it
+  // makes, its pitch rising fast (that rise is what makes it sound wet), in the echo.
+  function drip(gain = 0.22, pos = null) {
     const at = ctx.currentTime + 0.02;
-    const out = placed((Math.random() - 0.5) * 4, -1.5, -3 - Math.random() * 4);
-    const plink = ctx.createOscillator();
-    plink.frequency.setValueAtTime(1400 + Math.random() * 400, at);
-    plink.frequency.exponentialRampToValueAtTime(500, at + 0.05);
+    const out = pos ? placed(pos.x, pos.y, pos.z) : placed((Math.random() - 0.5) * 4, -1.5, -2.5 - Math.random() * 3);
+    burst(at, { type: 'highpass', freq: 2500, q: 0.7, peak: gain * 0.25, decay: 0.006, out });
+    const f0 = 650 + Math.random() * 500;
+    const ring = ctx.createOscillator();
+    ring.type = 'sine';
+    ring.frequency.setValueAtTime(f0, at + 0.004);
+    ring.frequency.exponentialRampToValueAtTime(f0 * (2 + Math.random() * 0.6), at + 0.06);
     const env = ctx.createGain();
-    env.gain.setValueAtTime(0, at);
-    env.gain.linearRampToValueAtTime(0.12, at + 0.003);
-    env.gain.exponentialRampToValueAtTime(0.0005, at + 0.12);
-    plink.connect(env);
+    env.gain.setValueAtTime(0, at + 0.004);
+    env.gain.linearRampToValueAtTime(gain, at + 0.008);
+    env.gain.exponentialRampToValueAtTime(gain * 0.25, at + 0.035);
+    env.gain.exponentialRampToValueAtTime(0.0003, at + 0.11);
+    ring.connect(env);
     env.connect(out);
-    plink.start(at);
-    plink.stop(at + 0.15);
+    ring.start(at);
+    ring.stop(at + 0.13);
   }
 
   // A chair dragged across the floor somewhere in the room.
@@ -546,6 +551,7 @@ export function createAudio() {
   night.gain.value = 0;
   night.connect(master);
   let nightTimer = null;
+  let tap = null; // where the leaking water is, and how loud: the sinks, or the mop bucket
 
   function cricket(at, x, z) {
     const out = placed(x, -1, z);
@@ -627,6 +633,7 @@ export function createAudio() {
       if (Math.random() < 0.7) cricket(now + Math.random() * 0.9, x, z);
     }
     if (Math.random() < 0.06) frog(now + Math.random());
+    if (tap && Math.random() < 0.55) setTimeout(() => drip(tap.gain * (0.8 + Math.random() * 0.4), tap.pos), Math.random() * 900);
     if (Math.random() < 0.012) scooter(now + 0.2);
   }
 
@@ -1100,6 +1107,8 @@ export function createAudio() {
     night(where) {
       resume();
       const level = where === 'open' ? 1 : where === 'inside' ? 0.3 : 0;
+      // Only where there is a tap: the corridor's stone sink on the left drips.
+      tap = where === 'open' ? { gain: 0.14, pos: { x: -2.2, y: -1, z: -2.5 } } : null;
       night.gain.setTargetAtTime(level, ctx.currentTime, 0.8);
       if (level > 0 && !nightTimer) nightTimer = setInterval(nightTick, 1000);
       if (level === 0 && nightTimer) {
@@ -1111,9 +1120,9 @@ export function createAudio() {
       resume();
       if (!playSample('squeak', { duration: 2.2, gain: 0.9, pos: { x: 1.2, y: 0, z: -1 } })) creak();
     },
-    drip() {
+    drip(gain) {
       resume();
-      drip();
+      drip(gain);
     },
     chair() {
       resume();
