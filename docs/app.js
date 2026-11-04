@@ -1151,6 +1151,10 @@ let stopDarkWalk = null;
 function waitInTheDark(ready) {
   stopDarkWalk?.();
   const stage = $('#stage');
+  // The picture moves inside its frame, never the frame itself: the line under the
+  // photo stays where it is and is never covered.
+  const view = $('#photo');
+  const moves = [];
   let done = false;
   let steps = null;
   let scale = 1;
@@ -1159,7 +1163,7 @@ function waitInTheDark(ready) {
     done = true;
     clearInterval(steps);
     stage.classList.remove('dark-walk');
-    stage.getAnimations().forEach((a) => a.cancel());
+    moves.forEach((a) => a.cancel());
     if (stopDarkWalk === stop) stopDarkWalk = null;
   };
   stopDarkWalk = stop;
@@ -1174,14 +1178,17 @@ function waitInTheDark(ready) {
       state.audio?.footsteps(1);
       const from = scale;
       scale = Math.min(1.12, scale + 0.006);
-      stage.animate(
-        [
-          { transform: `translateY(0) scale(${from})` },
-          { transform: `translateY(0.8%) scale(${from + 0.002})`, offset: 0.25 },
-          { transform: `translateY(0) scale(${scale})` },
-        ],
-        { duration: 520, easing: 'ease-out', fill: 'forwards' },
+      moves.push(
+        view.animate(
+          [
+            { transform: `translateY(0) scale(${from})` },
+            { transform: `translateY(0.8%) scale(${from + 0.002})`, offset: 0.25 },
+            { transform: `translateY(0) scale(${scale})` },
+          ],
+          { duration: 520, easing: 'ease-out', fill: 'forwards' },
+        ),
       );
+      if (moves.length > 2) moves.splice(0, moves.length - 2).forEach((a) => a.cancel()); // the last one holds the pose
     };
     step();
     steps = setInterval(step, 560);
