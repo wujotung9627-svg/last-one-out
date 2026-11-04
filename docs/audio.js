@@ -20,6 +20,9 @@ function corridorImpulse(ctx, seconds, decay) {
   return buffer;
 }
 
+// Seconds into sounds/basketball.mp3 where the first bounce lands.
+const BALL_FIRST_HIT = 0.1;
+
 export function createAudio() {
   const Context = window.AudioContext || window.webkitAudioContext;
   if (!Context) return null;
@@ -185,6 +188,35 @@ export function createAudio() {
   function basketball({ path, contacts }) {
     const start = ctx.currentTime + 0.05;
     const out = placed(path[0].x, -1.2, -path[0].z);
+    // A real recording, when there is one: it travels with the ball, and the corridor
+    // answers it (its long reverb plus a slap off the far wall).
+    if (samples.basketball) {
+      const end = path[path.length - 1].t;
+      const curve = (pick) => new Float32Array(path.map(pick));
+      out.positionX.setValueCurveAtTime(curve((p) => p.x), start, end);
+      out.positionZ.setValueCurveAtTime(curve((p) => -p.z), start, end);
+      const echo = ctx.createDelay(1);
+      echo.delayTime.value = 0.11;
+      const echoLevel = ctx.createGain();
+      echoLevel.gain.value = 0.35;
+      const extraWet = ctx.createGain();
+      extraWet.gain.value = 0.9;
+      const source = ctx.createBufferSource();
+      source.buffer = samples.basketball;
+      // Line the recording's first bounce up with the first one on screen.
+      const first = BALL_FIRST_HIT;
+      const level = ctx.createGain();
+      level.gain.value = 1.4;
+      source.connect(level);
+      level.connect(out);
+      level.connect(echo);
+      echo.connect(echoLevel);
+      echoLevel.connect(placed(0, -1, -16));
+      level.connect(extraWet);
+      extraWet.connect(reverb);
+      source.start(start + Math.max(0, (contacts[0] ?? 0.1) - first), Math.max(0, first - (contacts[0] ?? 0.1)));
+      return;
+    }
     const times = path.map((p) => p.t);
     const end = times[times.length - 1];
     const curve = (pick) => new Float32Array(path.map(pick));
@@ -728,6 +760,7 @@ export function createAudio() {
     loadSample('squeak', 'door-squeak.mp3'),
     loadSample('chair', 'wooden-chair.mp3'),
     loadSample('chimes', 'chimes.mp3'),
+    loadSample('basketball', 'basketball.mp3'), // optional; synthesised if missing
   ]).then(() => {
     if (samples.steps) stepSlices = onsets(samples.steps);
     if (samples.quick) quickSlices = onsets(samples.quick, { minGap: 0.14 });
@@ -966,6 +999,12 @@ export function createAudio() {
     basketball(run) {
       resume();
       basketball(run);
+    },
+    // When the recorded ball lands, so the ball on screen bounces with the sound.
+    ballHits() {
+      if (!samples.basketball) return null;
+      const hits = onsets(samples.basketball, { minGap: 0.1, threshold: 2 });
+      return hits.length ? hits.map((t) => t - hits[0] + BALL_FIRST_HIT) : null;
     },
     // A real voice on the school speaker. `voice` is an AudioBuffer, a WAV/WebM Blob, or a
     // file in sounds/. Resolves false when there is no such recording.

@@ -58,8 +58,8 @@ export function createVoice() {
     const local = voices.filter((v) => v.localService && want.test(v.lang));
     const fallback = lang === 'zh' ? voices.filter((v) => v.localService && /^zh/i.test(v.lang)) : [];
     const pool = local.length ? local : fallback;
-    // An old man's voice on the school speaker (macOS: Grandpa); otherwise the usual one.
-    const preferred = lang === 'zh' ? [/^Grandpa/, /Meijia|美佳/] : [/^Grandpa/, /Daniel|Samantha|Karen|Moira|Serena/];
+    // Only used when a line has no recording in sounds/ (the speaker plays those).
+    const preferred = lang === 'zh' ? [/Meijia|美佳/, /^Grandpa/] : [/Daniel|Samantha|Karen|Moira|Serena/];
     for (const like of preferred) {
       const found = pool.find((v) => like.test(v.name));
       if (found) return found;

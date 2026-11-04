@@ -142,6 +142,7 @@ const CREDITS = {
     ['role', 'Doors, boards and papers', 'SAM 3.1'],
     ['role', 'Your voice', 'Muse Voice Transcribe 1.0'],
     ['role', 'Footsteps, doors, children', 'The Red Library, Internet Archive (CC0)'],
+    ['role', 'The basketball', 'Free SFX'],
     ['role', 'Lettering', 'Bebas Neue, Caveat, Courier Prime, Iansui, LXGW WenKai TC, Ma Shan Zheng, Noto Serif TC (SIL Open Font License)'],
     ['role', 'Made for', 'Meta Global AI Developer Hackathon, 2026'],
     ['gap'],
@@ -157,6 +158,7 @@ const CREDITS = {
     ['role', '門、黑板與考卷', 'SAM 3.1'],
     ['role', '你的聲音', 'Muse Voice Transcribe 1.0'],
     ['role', '腳步、門與孩子的聲音', 'The Red Library，Internet Archive（CC0）'],
+    ['role', '籃球', 'Free SFX'],
     ['role', '字型', 'Bebas Neue、Caveat、Courier Prime、芫荽、霞鶩文楷、馬善政、思源宋體（SIL Open Font License）'],
     ['role', '為了', 'Meta Global AI Developer Hackathon，2026'],
     ['gap'],
@@ -1242,7 +1244,18 @@ async function floorPath(scene) {
 
 // Where the ball goes, frame by frame: bouncing out of the far end, then rolling towards
 // the camera. toFeet: it rolls all the way to your feet. Null when something is in the way.
+// The bounces: when the ball lands, in seconds. A recorded ball sets them; otherwise
+// each bounce is shorter than the last.
+function ballContacts() {
+  const recorded = state.audio?.ballHits?.();
+  if (recorded?.length) return recorded.filter((t) => t < 3.5);
+  const list = [];
+  for (let at = 0.1, gap = 0.55, k = 0; k < 7; k++, at += gap, gap *= 0.68) list.push(at);
+  return list;
+}
+
 function ballFrames({ vx, vy, y0, depthAt }, side, toFeet) {
+  const contactsAt = ballContacts();
   const camH = 1.3;
   const fy = 0.5 / BALL_TAN_Y, fx = 0.5 / BALL_TAN_X;
   const z0 = (camH * fy) / Math.max(0.02, y0 - vy);
@@ -1259,18 +1272,17 @@ function ballFrames({ vx, vy, y0, depthAt }, side, toFeet) {
     const travelled = v0 * t - 0.5 * decel * t * t;
     const z = Math.max(zEnd, z0 - travelled);
     const X = side * Math.min(1, travelled / distance);
-    // Bounces that match the sound: contacts at 0.1 s, then shorter and lower each time.
-    let lift = 0, contact = 0.1, gap = 0.55;
-    for (let k = 0; k < 7; k++) {
+    // Bounces that match the sound: up and down between one landing and the next.
+    let lift = 0;
+    for (let k = 0; k + 1 < contactsAt.length; k++) {
+      const contact = contactsAt[k], gap = contactsAt[k + 1] - contact;
       if (t >= contact && t < contact + gap) {
         const u = t - contact;
         lift = 0.5 * 9.8 * u * (gap - u);
         break;
       }
-      contact += gap;
-      gap *= 0.68;
     }
-    if (t < 0.1) lift = 0.5 * 9.8 * (0.1 - t) * (0.1 + t) * 0.6;
+    if (t < contactsAt[0]) lift = 0.5 * 9.8 * (contactsAt[0] - t) * (contactsAt[0] + t) * 0.6;
     const floor = vy + (camH * fy) / z;
     const x = vx + (X * fx) / z;
     const size = (0.24 * fy) / z; // a basketball, 0.24 m across, as a share of the picture's height
@@ -1303,54 +1315,69 @@ async function rollBall({ toFeet = false } = {}) {
   }
   const run = best.frames.length > 4 ? best : ballFrames(path, 0, false);
   const used = run.frames;
-  const contacts = [];
-  for (let at = 0.1, gap = 0.55, k = 0; k < 7 && at < run.seconds; k++, at += gap, gap *= 0.68) contacts.push(at);
+  const contacts = ballContacts().filter((at) => at < run.seconds);
   state.audio?.basketball({ path: used.map((f) => ({ t: f.t, x: f.X, z: f.z, speed: f.speed })), contacts });
   await animateBall(used, run.seconds, scene);
   const last = used[used.length - 1];
   return sameScene(currentScene(), scene) && !best.blocked && toFeet ? last : false;
 }
 
-// A basketball drawn as a lit sphere each frame: the seams turn as it rolls, the light
-// from the ceiling stays where it is. Pebbled orange-brown leather, black seams, no marks.
-const BALL_PX = 96;
-const pebble = new Float32Array(64 * 64 * 64);
-for (let i = 0; i < pebble.length; i++) pebble[i] = Math.random();
+// A basketball drawn as a lit sphere each frame. Its leather is a photo of a worn ball
+// (made by Muse Image, its flash lighting taken out): the seams and scuffs turn as it
+// rolls, while the light stays put. The corridor's tubes light it from above; the
+// camera's flash lights it more the closer it comes, as in every photo of the school.
+const BALL_PX = 128;
+let ballSkin = null; // { data, size } of ball-texture.png
+loadPicture('ball-texture.png')
+  .then((img) => {
+    const c = document.createElement('canvas');
+    c.width = c.height = img.naturalWidth;
+    const g = c.getContext('2d', { willReadFrequently: true });
+    g.drawImage(img, 0, 0);
+    ballSkin = { data: g.getImageData(0, 0, c.width, c.height).data, size: c.width };
+  })
+  .catch(() => {});
 
-function drawBall(g, angle) {
+function drawBall(g, angle, flash = 0.5) {
   const image = g.createImageData(BALL_PX, BALL_PX);
   const r = BALL_PX / 2 - 1;
   const ca = Math.cos(angle), sa = Math.sin(angle);
-  const light = [0.15, -0.8, 0.58]; // from the tubes above, a little in front
-  const ln = Math.hypot(...light);
-  const L = light.map((v) => v / ln);
-  const half = [L[0], L[1], L[2] + 1];
-  const hn = Math.hypot(...half);
-  const q = (k) => Math.min(63, Math.max(0, Math.floor((k + 1) * 31.5)));
+  const top = [0.15, -0.82, 0.55]; // the tubes, above and a little in front
+  const tn = Math.hypot(...top);
+  const L = top.map((v) => v / tn);
+  const hl = Math.hypot(L[0], L[1], L[2] + 1);
+  const H = [L[0] / hl, L[1] / hl, (L[2] + 1) / hl]; // halfway between the light and the eye
+  const skin = ballSkin;
   for (let py = 0; py < BALL_PX; py++) {
     for (let px = 0; px < BALL_PX; px++) {
       const nx = (px + 0.5 - BALL_PX / 2) / r, ny = (py + 0.5 - BALL_PX / 2) / r;
       const d2 = nx * nx + ny * ny;
       if (d2 > 1) continue;
       const nz = Math.sqrt(1 - d2);
-      // Into the ball's own coordinates: it turns about the horizontal axis as it rolls to you.
+      // Into the ball's own coordinates: it turns about the horizontal axis as it rolls.
       const u = nx, v = ny * ca - nz * sa, w = ny * sa + nz * ca;
-      const gap = Math.min(Math.abs(u), Math.abs(w), Math.abs(Math.abs(v) - (0.6 + 0.32 * (u * u - w * w))));
-      const seamMix = Math.min(1, Math.max(0, (0.03 - gap) / 0.014)); // soft-edged seams
-      const seam = seamMix > 0.5;
-      const grain = pebble[(q(u) * 64 + q(v)) * 64 + q(w)];
-      const leather = [172 * (0.86 + grain * 0.16), 84 * (0.84 + grain * 0.18), 42 * (0.8 + grain * 0.2)];
-      const base = leather.map((c, k) => c + ([24, 18, 16][k] - c) * seamMix);
-      const diffuse = Math.max(0, nx * L[0] + ny * L[1] + nz * L[2]);
-      const spec = Math.pow(Math.max(0, (nx * half[0] + ny * half[1] + nz * half[2]) / hn), 24) * (seam ? 0.05 : 0.16);
-      const shade = 0.16 + 0.84 * diffuse;
-      const edge = Math.pow(nz, 0.35); // a little darker at the rim
+      let base = [150, 70, 36];
+      if (skin) {
+        // The back of a ball looks like its front: the same leather, mirrored through it.
+        // Near the photo's rim the leather is squeezed, so it fades into plain leather.
+        const tx = Math.min(skin.size - 1, Math.max(0, Math.floor(((u + 1) / 2) * skin.size)));
+        const ty = Math.min(skin.size - 1, Math.max(0, Math.floor(((v + 1) / 2) * skin.size)));
+        const k = (ty * skin.size + tx) * 4;
+        const keep = Math.min(1, Math.max(0, (Math.abs(w) - 0.18) / 0.25));
+        if (skin.data[k + 3]) base = [0, 1, 2].map((c) => skin.data[k + c] * keep + base[c] * (1 - keep));
+      }
+      const tubes = Math.max(0, nx * L[0] + ny * L[1] + nz * L[2]);
+      const shade = 0.15 + 0.4 * tubes + flash * (0.25 + 0.55 * nz); // the flash is front-on
+      const spec = Math.pow(nz, 36) * 0.07 * flash + Math.pow(Math.max(0, nx * H[0] + ny * H[1] + nz * H[2]), 40) * 0.05; // the flash's and the tubes' sheen
+      const rim = Math.pow(nz, 0.3);
+      const grain = (Math.random() - 0.5) * 14; // the photos' sensor noise
       const i = (py * BALL_PX + px) * 4;
-      // The corridor's fluorescent light is a little green, and it is night.
-      image.data[i] = Math.min(255, (base[0] * shade * edge + spec * 255) * 0.82);
-      image.data[i + 1] = Math.min(255, (base[1] * shade * edge + spec * 255) * 0.9);
-      image.data[i + 2] = Math.min(255, (base[2] * shade * edge + spec * 255) * 0.8);
-      image.data[i + 3] = d2 > 0.97 ? 255 * (1 - (d2 - 0.97) / 0.03) : 255;
+      const lum = (base[0] + base[1] + base[2]) / 3;
+      const col = base.map((c) => c * 0.85 + lum * 0.15); // a little less saturated, like the photos
+      image.data[i] = Math.min(255, Math.max(0, col[0] * shade * rim * 0.95 + spec * 255 + grain));
+      image.data[i + 1] = Math.min(255, Math.max(0, col[1] * shade * rim * 1.02 + spec * 255 + grain));
+      image.data[i + 2] = Math.min(255, Math.max(0, col[2] * shade * rim * 0.92 + spec * 255 + grain));
+      image.data[i + 3] = d2 > 0.95 ? 255 * (1 - (d2 - 0.95) / 0.05) : 255;
     }
   }
   g.putImageData(image, 0, 0);
@@ -1359,11 +1386,14 @@ function drawBall(g, angle) {
 function animateBall(frames, seconds, scene) {
   const ball = $('#ball');
   const shadow = $('#ball-shadow');
+  const reflection = $('#ball-reflection');
   const g = ball.getContext('2d');
+  const rg = reflection.getContext('2d');
   const { w, h } = stageSize();
   const ratio = h / w;
   ball.hidden = false;
   shadow.hidden = false;
+  reflection.hidden = false;
   const started = performance.now();
   return new Promise((resolve) => {
     const tick = (now) => {
@@ -1376,10 +1406,28 @@ function animateBall(frames, seconds, scene) {
       const m = b.t > a.t ? Math.min(1, Math.max(0, (t - a.t) / (b.t - a.t))) : 1;
       const mix = (key) => a[key] + (b[key] - a[key]) * m;
       const size = mix('size'), floor = mix('floor'), y = mix('y'), x = mix('x');
-      Object.assign(ball.style, { left: `${x * 100}%`, top: `${y * 100}%`, width: `${size * ratio * 100}%`, opacity: t < 0.15 ? String(t / 0.15) : '1' });
+      const z = mix('z');
+      const speed = Math.abs(mix('speed'));
+      const flash = Math.min(1, 6 / (z * z)); // flash falloff: dark far away, lit close by
+      Object.assign(ball.style, {
+        left: `${x * 100}%`,
+        top: `${y * 100}%`,
+        width: `${size * ratio * 100}%`,
+        opacity: t < 0.15 ? String(t / 0.15) : '1',
+        filter: `blur(${(0.35 + Math.min(2.2, speed * 0.22)).toFixed(2)}px)`, // soft like the photo, smeared when fast
+      });
       const height = (floor - y) / Math.max(size, 1e-3);
-      Object.assign(shadow.style, { left: `${x * 100}%`, top: `${floor * 100}%`, width: `${size * ratio * 130}%`, opacity: String(Math.max(0, 0.6 - height * 0.3)) });
-      drawBall(g, mix('spin'));
+      Object.assign(shadow.style, { left: `${x * 100}%`, top: `${floor * 100}%`, width: `${size * ratio * 115}%`, opacity: String(Math.max(0, 0.8 - height * 0.45)) });
+      drawBall(g, mix('spin'), flash);
+      // The wet floor mirrors it, faintly, as far below the floor as the ball is above it.
+      rg.clearRect(0, 0, BALL_PX, BALL_PX);
+      rg.drawImage(ball, 0, 0);
+      Object.assign(reflection.style, {
+        left: `${x * 100}%`,
+        top: `${(floor + (floor - y)) * 100}%`,
+        width: `${size * ratio * 100}%`,
+        opacity: String(0.2 * (t < 0.15 ? t / 0.15 : 1)),
+      });
       if (t < seconds) requestAnimationFrame(tick);
       else resolve();
     };
@@ -1610,7 +1658,7 @@ const warpNow = () => WARP_BY_WALK[Math.min(state.walk?.index ?? 0, WARP_BY_WALK
 const followed = () => state.walk.index >= 1 && Math.random() < 0.5;
 
 function clearOverlays() {
-  for (const id of ['#ball', '#ball-shadow']) {
+  for (const id of ['#ball', '#ball-shadow', '#ball-reflection']) {
     $(id).getAnimations().forEach((a) => a.cancel());
     $(id).hidden = true;
   }

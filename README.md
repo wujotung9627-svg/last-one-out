@@ -65,7 +65,7 @@ This repository started on 2026-11-03 (Taipei time). Everything here was written
 
 ## Credits
 
-Made by JO TUNG WU. Sounds: The Red Library on the Internet Archive (CC0). Fonts: Bebas Neue, Caveat, Courier Prime, Iansui, LXGW WenKai TC, Ma Shan Zheng, Noto Serif TC (SIL Open Font License).
+Made by JO TUNG WU. Sounds: The Red Library on the Internet Archive (CC0); the basketball from the Free SFX channel (published as free to use; see `public/sounds/SOURCES.md`). Fonts: Bebas Neue, Caveat, Courier Prime, Iansui, LXGW WenKai TC, Ma Shan Zheng, Noto Serif TC (SIL Open Font License).
 
 ## Safety
 
