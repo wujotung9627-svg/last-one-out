@@ -64,6 +64,7 @@ const LINES = {
     otherPhoto: '(click it for the other one)',
     wayBack: 'Back to the corridor',
     wayOn: 'Walk on',
+    wayOut: 'Walk out',
     rollCall: 'Answer when your name is called.',
     here: 'Here',
     wrongAnswer: 'That is not how you answer.',
@@ -127,6 +128,7 @@ const LINES = {
     otherPhoto: '（點照片看另一張）',
     wayBack: '回到走廊',
     wayOn: '往前走',
+    wayOut: '走出去',
     rollCall: '點到名要答「有」。',
     here: '有',
     wrongAnswer: '不是這樣答的。',
@@ -598,6 +600,10 @@ function placeHotspots(scene) {
       if (!doors.length) {
         button.classList.add('way');
         button.append(el('span', exit ? t('wayBack') : t('wayOn'), 'way-hint'));
+      } else if (exit && i === 0) {
+        // Once a line is kept, the way out of the room is written on its door.
+        button.classList.add('way');
+        button.append(el('span', t('wayOut'), 'way-hint'));
       }
       if (exit || leadsOn(scene, spot, i)) {
         button.classList.add('forward');

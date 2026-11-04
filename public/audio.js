@@ -558,6 +558,8 @@ export function createAudio() {
   night.connect(master);
   let nightTimer = null;
   let tap = null; // where the leaking tap is, and how loud
+  let quiet = false; // the school has gone silent around you
+  let nightLevel = 0;
   let dripSlices = []; // the single drops in the recording: [start, length] in seconds
 
   function cricket(at, x, z) {
@@ -640,7 +642,7 @@ export function createAudio() {
       if (Math.random() < 0.7) cricket(now + Math.random() * 0.9, x, z);
     }
     if (Math.random() < 0.06) frog(now + Math.random());
-    if (tap && Math.random() < 0.55) setTimeout(() => drip(tap.gain * (0.8 + Math.random() * 0.4), tap.pos), Math.random() * 900);
+    if (tap && !quiet && Math.random() < 0.55) setTimeout(() => drip(tap.gain * (0.8 + Math.random() * 0.4), tap.pos), Math.random() * 900);
     if (Math.random() < 0.012) scooter(now + 0.2);
   }
 
@@ -697,7 +699,7 @@ export function createAudio() {
     env.connect(master);
     source.start(at, Math.random() * 0.6, 0.2);
     hum.gain.setValueAtTime(0.01, at);
-    hum.gain.linearRampToValueAtTime(0.035, at + 0.3);
+    hum.gain.linearRampToValueAtTime(quiet ? 0.0005 : 0.035, at + 0.3);
   }
 
   function chime(at, frequency) {
@@ -1120,9 +1122,10 @@ export function createAudio() {
     night(where) {
       resume();
       const level = where === 'open' ? 1 : where === 'inside' ? 0.3 : 0;
+      nightLevel = level;
       // Only where there is a tap: the corridor's stone sink on the left drips.
       tap = where === 'open' ? { gain: 0.14, pos: { x: -2.2, y: -1, z: -2.5 } } : null;
-      night.gain.setTargetAtTime(level, ctx.currentTime, 0.8);
+      night.gain.setTargetAtTime(quiet ? 0 : level, ctx.currentTime, 0.8);
       if (level > 0 && !nightTimer) nightTimer = setInterval(nightTick, 1000);
       if (level === 0 && nightTimer) {
         clearInterval(nightTimer);
@@ -1183,8 +1186,12 @@ export function createAudio() {
       const start = ctx.currentTime + 0.1;
       [E4, C4, D4, G3, G3, D4, E4, C4].forEach((f, i) => chime(start + i * 0.75 + (i >= 4 ? 0.6 : 0), f));
     },
+    // The school goes quiet: the hum, the insects and the dripping tap stop. Everything
+    // that happens still makes its sound: the ball, the steps, the speaker, the scares.
     silence(on) {
-      master.gain.setTargetAtTime(on ? 0.0001 : MASTER_LEVEL, ctx.currentTime, 0.4);
+      quiet = on;
+      hum.gain.setTargetAtTime(on ? 0.0005 : 0.035, ctx.currentTime, 0.4);
+      night.gain.setTargetAtTime(on ? 0 : nightLevel, ctx.currentTime, 0.4);
     },
     echo(level) {
       wet.gain.setTargetAtTime(level, ctx.currentTime, 0.5);

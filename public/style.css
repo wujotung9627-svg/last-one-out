@@ -599,8 +599,8 @@ html:lang(en) .chip { font: 1rem var(--hand-en); }
 .hotspot.forward::after { content: ""; position: absolute; inset: 8% 10%; border-radius: 50%; background: radial-gradient(ellipse at 50% 50%, rgba(255, 244, 214, 0.13), rgba(255, 244, 214, 0) 70%); animation: door-breathe 3.2s ease-in-out infinite; pointer-events: none; }
 .hotspot.locked { cursor: pointer; }
 /* Where there is no door to click, the way on is written on the picture. */
-.hotspot.way { display: flex; align-items: flex-end; justify-content: center; }
-.way-hint { margin-bottom: 8%; padding: 4px 14px; border-bottom: 1px solid rgba(236, 236, 226, 0.5); color: rgba(236, 236, 226, 0.85); font: 1.3rem var(--hand-zh); letter-spacing: 0.15em; text-shadow: 0 0 6px rgba(0, 0, 0, 0.9); animation: door-breathe 3.2s ease-in-out infinite; pointer-events: none; }
+.hotspot.way { display: flex; align-items: center; justify-content: center; }
+.way-hint { padding: 4px 14px; white-space: nowrap; border-bottom: 1px solid rgba(236, 236, 226, 0.5); color: rgba(236, 236, 226, 0.85); font: 1.3rem var(--hand-zh); letter-spacing: 0.15em; text-shadow: 0 0 6px rgba(0, 0, 0, 0.9); animation: door-breathe 3.2s ease-in-out infinite; pointer-events: none; }
 html:lang(en) .way-hint { font-family: var(--hand-en); font-size: 1.5rem; letter-spacing: 0.04em; }
 
 @keyframes door-breathe {
