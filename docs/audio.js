@@ -849,6 +849,26 @@ export function createAudio() {
     return new Promise((resolve) => setTimeout(resolve, (length + 0.4) * 1000));
   }
 
+  // Cuts the silence before and after a voice; null when there is no voice in it.
+  function trimSilence(buffer) {
+    const data = buffer.getChannelData(0);
+    let peak = 0;
+    for (let i = 0; i < data.length; i++) peak = Math.max(peak, Math.abs(data[i]));
+    if (peak < 0.02) return null;
+    const threshold = peak * 0.1;
+    let first = 0, last = data.length - 1;
+    while (first < data.length && Math.abs(data[first]) < threshold) first++;
+    while (last > first && Math.abs(data[last]) < threshold) last--;
+    const pad = Math.floor(buffer.sampleRate * 0.08);
+    first = Math.max(0, first - pad);
+    last = Math.min(data.length - 1, last + pad * 2);
+    const out = ctx.createBuffer(1, last - first + 1, buffer.sampleRate);
+    const target = out.getChannelData(0);
+    const gain = 0.8 / peak; // every name equally loud
+    for (let i = first; i <= last; i++) target[i - first] = data[i] * gain;
+    return out;
+  }
+
   // A recorded voice in a file (sounds/), decoded once.
   const voices = {};
   async function voiceFile(file) {
@@ -1014,6 +1034,8 @@ export function createAudio() {
       if (voice instanceof AudioBuffer) buffer = voice;
       else if (voice instanceof Blob) buffer = await ctx.decodeAudioData(await voice.arrayBuffer()).catch(() => null);
       else if (typeof voice === 'string') buffer = await voiceFile(voice);
+      if (!buffer) return false;
+      if (typeof voice !== 'string') buffer = trimSilence(buffer); // your own recording
       if (!buffer) return false;
       await loudspeaker(buffer, options);
       return true;

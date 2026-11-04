@@ -45,6 +45,7 @@ const LINES = {
     nameHint: 'Stays on this device. It is never sent anywhere.',
     sayName: 'Say it',
     nameSaid: 'Heard ✓',
+    nameTooQuiet: 'Nothing came through. Allow the microphone, come closer and say it again.',
     nameVoiceHint: 'Say your name once. At roll call the school speaker will call it in your own voice. The recording stays on this device.',
     paOffice: 'Student on duty, please come to the teachers’ office now.',
     yearLabel: 'The year you were on duty there',
@@ -104,6 +105,7 @@ const LINES = {
     nameHint: '只留在這台裝置上，不會傳出去。',
     sayName: '唸一次',
     nameSaid: '錄好了 ✓',
+    nameTooQuiet: '沒有錄到聲音。請允許麥克風、靠近一點再唸一次。',
     nameVoiceHint: '唸一次你的名字。點名時，學校廣播會用你自己的聲音叫你。錄音只留在這台裝置上。',
     paOffice: '值日生，請馬上到辦公室來。',
     yearLabel: '你在那裡當值日生的那一年',
@@ -2101,28 +2103,35 @@ $('#name').addEventListener('input', () => {
 
 // ---------- speaking your memories ----------
 
-// Say your name once at the start; it never leaves the browser.
+// Say your name once at the start; it never leaves the browser. Click to start, click
+// again (or wait four seconds) to stop; you hear it back on the school speaker.
 function setupNameVoice() {
   const button = $('#name-voice');
   if (!button) return;
   button.hidden = !voice.canRecord;
   button.textContent = t('sayName');
+  let recording = false;
   button.addEventListener('click', async () => {
-    if (button.classList.contains('recording')) return;
+    if (recording) return voice.stopDictation();
     state.audio ??= createAudio(); // from a click
+    recording = true;
     button.classList.add('recording');
     button.textContent = t('stop');
     showError('');
     try {
-      const { heard, recording } = await voice.listen({ ms: 6000, record: true }).result;
-      if (!heard || !recording) throw new Error('nothing heard');
-      state.nameVoice = recording;
+      const wav = await voice.dictate({ maxMs: 4000 });
+      recording = false;
+      button.classList.remove('recording');
+      button.textContent = '…';
+      const played = await state.audio?.loudspeaker(wav); // false: nothing loud enough in it
+      if (!played) throw new Error('too quiet');
+      state.nameVoice = wav;
       button.textContent = t('nameSaid');
-      state.audio?.loudspeaker(recording); // you hear it on the speaker once
     } catch {
-      showError(t('micFailed'));
+      showError(t('nameTooQuiet'));
       button.textContent = t('sayName');
     } finally {
+      recording = false;
       button.classList.remove('recording');
     }
   });
