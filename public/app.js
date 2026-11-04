@@ -1350,10 +1350,11 @@ function ballFrames({ vx, vy, y0, depthAt }, side, toFeet) {
     const floor = vy + (camH * fy) / z;
     const x = vx + (X * fx) / z;
     const size = (0.24 * fy) / z; // a basketball, 0.24 m across, as a share of the picture's height
-    // Something standing on the floor ahead: the depth jumps nearer.
+    // Something standing on the floor ahead: the depth jumps nearer. Not checked while
+    // it comes out of the far end, where the floor meets the dark and the depth always jumps.
     if (depthAt) {
       const d = depthAt(x, floor - size * 0.5);
-      if (lastDepth !== null && d - lastDepth > 0.12) return { frames, blocked: true, seconds: frames.length ? frames[frames.length - 1].t : 0 };
+      if (i >= 10 && lastDepth !== null && d - lastDepth > 0.12) return { frames, blocked: true, seconds: frames.length ? frames[frames.length - 1].t : 0 };
       lastDepth = d;
     }
     frames.push({ t, x, y: floor - (lift * fy) / z, floor, size, spin: travelled / 0.12, X, z, speed: Math.max(0, v0 - decel * t) });
@@ -1377,7 +1378,9 @@ async function rollBall({ toFeet = false } = {}) {
     if (!best || (!run.blocked && best.blocked) || (run.blocked === best.blocked && run.frames.length > best.frames.length)) best = run;
     if (!run.blocked) break;
   }
-  const run = best.frames.length > 4 ? best : ballFrames(path, 0, false);
+  // Every lane stopped short: the depth map is wrong more often than the corridor is
+  // blocked, and a ball that never comes is worse. It rolls down the middle to you.
+  const run = best.frames.length > 24 ? best : ballFrames({ ...path, depthAt: null }, 0, toFeet);
   const used = run.frames;
   const contacts = ballContacts().filter((at) => at < run.seconds);
   state.audio?.basketball({ path: used.map((f) => ({ t: f.t, x: f.X, z: f.z, speed: f.speed })), contacts });
