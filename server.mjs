@@ -418,7 +418,7 @@ Reply with JSON only:
 "scores":[{"subject":"an exam subject in the player's language","subject_en":"the subject in English","score":a low score between 38 and 59}]}
 Give three scores and one thread per memory. Every memory must become at least one concrete, clearly visible physical detail in the photo details (put it in the photo where it belongs), so the player recognises their own school at once.`;
 
-const CARDS_SYSTEM = `If "titles" are given, they are already written on the board: use them exactly, in that order, as the three titles, and make each card's edits show its line.
+const CARDS_SYSTEM = `If "titles" are given, they are already written on the board: use them exactly, in that order, as the three titles, and make each card's edits show its line so plainly that the player recognises it in every photo of the next walk: large, in the foreground or filling the room, repeated where it can be.
 You deal the choices in "Last One Out", a quiet horror game set in a remembered Taiwanese school at night. The player, the student on duty, walks the school three times. At the end of a walk three half-erased lines are on a chalkboard; the player keeps one, and that line decides how the next walk has changed.
 You get the memory bible (memories, era, threads that must come back changed), the walk being prepared, the changes already made, and the photos the next walk reuses.
 Walk 2 goes corridor -> classroom door -> teachers' office. Things are clearly wrong and space begins to bend: a tube light is dark and the corridor beyond it is far too long, the same door repeats into the distance, the duty student's red bucket stands where it could not be, the mop trail runs up the wall, every classroom door stands ajar. Bring back one memory thread, already wrong.
@@ -922,6 +922,7 @@ const publicBible = (school) => ({
 // grows out of a different memory and names it.
 const TITLES_SYSTEM = `You write the three half-erased lines of chalk on the board in "Last One Out", a quiet horror walk through a remembered Taiwanese school at night. The player keeps one line, and it decides how the school has changed on the next walk.
 Each line grows out of a DIFFERENT one of the player's memories and names it in the player's own words (the tree, the teacher, the ranking...), saying how it has changed tonight. Use the memory threads for this walk. Never repeat an earlier change.
+Each change must be BIG enough to see at once in a photograph from across the room: something that fills a wall, covers the floor, blocks a doorway, grows through the windows or is repeated everywhere. Never a small object (a name tag, a pen, a note, a label) that a photo would not show.
 At most 8 Chinese characters or 6 English words each. Plain, quiet and eerie. No faces, no death, no blood, no ghosts.
 Reply with JSON only: {"lines":[{"title":"in the player's language","title_en":"in natural English"},{...},{...}]}`;
 
