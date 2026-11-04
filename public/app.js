@@ -534,10 +534,15 @@ const boxOverlap = (a, b) => {
 // The doors of a place, largest (nearest) first, each door once: SAM can box the same
 // door twice, and one half must not be locked while the other opens. In the close-up
 // of the classroom door, that door is the only one: windows there are not doors.
+// Not a way through: a sliver at the very edge of the picture (a door frame cut off by
+// the frame), or a door too small or too high up to walk through (a cupboard door).
+const walkable = (b, sceneId) =>
+  !((b.x < 0.01 || b.x + b.w > 0.99) && b.w < 0.06) && (sceneId === 'door' || (b.h >= 0.18 && b.y + b.h >= 0.45));
+
 function doorsOf(scene) {
   if (scene.doorList) return scene.doorList;
   const kept = [];
-  for (const b of [...(scene.doors ?? [])].filter((d) => doorLike(d, scene.id === 'door')).sort((a, z) => z.w * z.h - a.w * a.h)) {
+  for (const b of [...(scene.doors ?? [])].filter((d) => doorLike(d, scene.id === 'door') && walkable(d, scene.id)).sort((a, z) => z.w * z.h - a.w * a.h)) {
     if (kept.every((k) => boxOverlap(b, k) < 0.3)) kept.push(b);
   }
   const list = scene.id === 'door' ? kept.slice(0, 1) : kept;
@@ -565,7 +570,11 @@ function placeHotspots(scene) {
     return;
   }
   const exit = BOARD_SCENES.has(scene.id);
-  const spots = doorsOf(scene).length ? doorsOf(scene) : [{ x: 0.4, y: 0.3, w: 0.2, h: 0.5 }];
+  // In the close-up, the door to click is the one Muse Image opened, once that is known.
+  const opening = scene.id === 'door' ? openingNow.get(scene.photo) : null;
+  const doors = opening ? [opening.door] : doorsOf(scene);
+  // No door found: straight on down the corridor, or back the way you came in a room.
+  const spots = doors.length ? doors : [exit ? { x: 0.3, y: 0.8, w: 0.4, h: 0.2 } : { x: 0.4, y: 0.3, w: 0.2, h: 0.5 }];
   const open = forwardDoor(scene);
   layer.replaceChildren(
     ...spots.map((spot, i) => {
@@ -575,31 +584,28 @@ function placeHotspots(scene) {
       if (exit || leadsOn(scene, spot, i)) {
         button.classList.add('forward');
         button.setAttribute('aria-label', exit ? t('throughDoor') : t('forward'));
-        button.addEventListener('click', () => advance(spot));
+        button.addEventListener('click', () => advance());
       } else {
         button.classList.add('locked');
         button.setAttribute('aria-label', t('lockedDoor'));
-        button.addEventListener('click', () => rattle(button, spot));
+        button.addEventListener('click', rattle);
       }
       return button;
     }),
   );
 }
 
-async function rattle(button, spot) {
+// A locked door: the handle rattles and the whole picture jolts with it. Nothing is cut
+// out of the photo, so nothing can come loose from where it belongs.
+function rattle() {
   if (state.stats) state.stats.locked += 1;
   state.audio?.rattle();
   say(t('locked'));
-  if (REDUCED_MOTION || !spot || state.busy) return;
-  const door = await doorLeaf(spot);
-  if (!door) return;
-  const { leaf } = door;
-  leaf.hidden = false;
-  await leaf.animate(
-    [{ transform: 'translateX(0)' }, { transform: 'translateX(-0.25%)' }, { transform: 'translateX(0.25%)' }, { transform: 'translateX(-0.15%)' }, { transform: 'translateX(0)' }],
-    { duration: 360 },
-  ).finished;
-  if ($('#door-gap').hidden) leaf.hidden = true;
+  if (REDUCED_MOTION || state.busy) return;
+  $('#stage').animate(
+    [{ transform: 'translate(0, 0)' }, { transform: 'translate(-2px, 0)' }, { transform: 'translate(2px, 0)' }, { transform: 'translate(-1px, 0)' }, { transform: 'translate(0, 0)' }],
+    { duration: 300 },
+  );
 }
 
 // The page writes the name itself; it is never sent to a model.
@@ -679,11 +685,11 @@ function sheetCorners(url, b, kind = 'sheet') {
   return sheetCache.get(key);
 }
 
-// kind: 'sheet' (white paper), 'board' (a dark chalkboard), 'door' (the colour of the
-// door's middle). The region is found by Otsu's threshold, filled from the middle.
+// kind: 'sheet' (white paper), 'pinned' (a sheet on a board), 'board' (a dark
+// chalkboard). The region is found by Otsu's threshold, filled from the middle.
 async function findSheet(url, b, kind = 'sheet') {
   const img = await loadPicture(url);
-  const pad = kind === 'door' ? 0.05 : 0.02; // look only inside the box SAM found
+  const pad = 0.02; // look only inside the box SAM found
   const x0 = Math.max(0, b.x - b.w * pad);
   const y0 = Math.max(0, b.y - b.h * pad);
   const x1 = Math.min(1, b.x + b.w * (1 + pad));
@@ -696,22 +702,12 @@ async function findSheet(url, b, kind = 'sheet') {
   const g = canvas.getContext('2d', { willReadFrequently: true });
   g.drawImage(img, x0 * img.naturalWidth, y0 * img.naturalHeight, (x1 - x0) * img.naturalWidth, (y1 - y0) * img.naturalHeight, 0, 0, W, H);
   const px = g.getImageData(0, 0, W, H).data;
-  // The door's own colour: the median of a strip down its middle.
-  let ref = null;
-  if (kind === 'door') {
-    const strip = [];
-    for (let y = Math.round(H * 0.3); y < Math.round(H * 0.7); y++) {
-      for (let x = Math.round(W * 0.45); x < Math.round(W * 0.55); x++) strip.push(y * W + x);
-    }
-    ref = [0, 1, 2].map((k) => strip.map((i) => px[i * 4 + k]).sort((a, z) => a - z)[strip.length >> 1]);
-  }
   const white = new Uint8Array(W * H);
   const hist = new Array(256).fill(0);
   for (let i = 0; i < W * H; i++) {
     const r = px[i * 4], gr = px[i * 4 + 1], bl = px[i * 4 + 2];
     let v;
     if (kind === 'board') v = 255 - (r + gr + bl) / 3; // dark
-    else if (kind === 'door') v = 255 - Math.hypot(r - ref[0], gr - ref[1], bl - ref[2]) * 2.2; // like the door
     else v = (r + gr + bl) / 3 - (Math.max(r, gr, bl) - Math.min(r, gr, bl)) * 1.6; // sheet / pinned: bright and grey, not tinted glass
     v = Math.max(0, Math.min(255, Math.round(v)));
     white[i] = v;
@@ -1148,17 +1144,25 @@ function choose(index) {
 
 // When the next place is not ready yet: no message. The lights go down and you keep
 // walking in the dark until it is there (render() brings the light back).
+// Only one walk in the dark at a time, and it always ends when a place is shown:
+// a second one left running kept the stage zoomed in over the line under the photo.
+let stopDarkWalk = null;
+
 function waitInTheDark(ready) {
+  stopDarkWalk?.();
   const stage = $('#stage');
   let done = false;
   let steps = null;
   let scale = 1;
   const stop = () => {
+    if (done) return;
     done = true;
     clearInterval(steps);
     stage.classList.remove('dark-walk');
     stage.getAnimations().forEach((a) => a.cancel());
+    if (stopDarkWalk === stop) stopDarkWalk = null;
   };
+  stopDarkWalk = stop;
   ready.then?.(stop, stop);
   setTimeout(() => {
     if (done) return;
@@ -1543,56 +1547,206 @@ async function tvStatic(scene, on) {
   staticTimer = setInterval(draw, 70);
 }
 
-// A door is its own piece of the photo, cut along its four corners. Behind it, the dark.
-async function doorLeaf(spot) {
+// ---------- the classroom door opens ----------
+
+// Muse Image draws the same close-up with the door standing open. The page shows that
+// picture only around the door that changed, sweeping across it the way the door moves:
+// the door is the only thing that moves, and whatever stands in front of it stays put.
+// No open photo yet, or no clear door in it: nothing moves, and you simply walk in.
+const openings = new Map(); // close-up photo -> promise of the opening, or null
+const openingNow = new Map(); // the same, once measured
+
+function doorOpening(scene) {
+  if (scene?.id !== 'door' || scene.pending || !scene.photo) return Promise.resolve(null);
+  if (!openings.has(scene.photo)) {
+    const opened = scene.opened
+      ? Promise.resolve(scene.opened)
+      : REPLAY_SRC
+        ? Promise.resolve(null)
+        : api('/api/opened', { schoolId: state.schoolId, photo: scene.photo }).then((res) => res.opened ?? null);
+    const made = opened
+      .then((url) => url && measureOpening(scene, url))
+      .catch(() => null)
+      .then((opening) => {
+        if (opening) openingNow.set(scene.photo, opening);
+        const here = currentScene();
+        if (opening && sameScene(here, scene) && !state.busy) placeHotspots(here); // the door that opens is the one to click
+        return opening;
+      });
+    openings.set(scene.photo, made);
+  }
+  return openings.get(scene.photo);
+}
+
+// Where the open photo differs from the closed one, around one of the doors SAM found.
+async function measureOpening(scene, url) {
+  const [closed, open] = await Promise.all([loadPicture(scene.photo), loadPicture(url)]);
+  const W = 160;
+  const H = Math.round((W * closed.naturalHeight) / closed.naturalWidth);
+  const pixels = (img) => {
+    const c = document.createElement('canvas');
+    c.width = W;
+    c.height = H;
+    const g = c.getContext('2d', { willReadFrequently: true });
+    g.drawImage(img, 0, 0, W, H);
+    return g.getImageData(0, 0, W, H).data;
+  };
+  const a = pixels(closed), b = pixels(open);
+  let diff = new Float32Array(W * H);
+  for (let i = 0; i < W * H; i++) diff[i] = (Math.abs(a[i * 4] - b[i * 4]) + Math.abs(a[i * 4 + 1] - b[i * 4 + 1]) + Math.abs(a[i * 4 + 2] - b[i * 4 + 2])) / 3;
+  // Soften it (5 x 5), so a door is one patch rather than its edges.
+  for (const [dx, dy] of [[1, 0], [0, 1]]) {
+    const out = new Float32Array(W * H);
+    for (let y = 0; y < H; y++)
+      for (let x = 0; x < W; x++) {
+        let sum = 0, n = 0;
+        for (let k = -2; k <= 2; k++) {
+          const xx = x + k * dx, yy = y + k * dy;
+          if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue;
+          sum += diff[yy * W + xx];
+          n += 1;
+        }
+        out[y * W + x] = sum / n;
+      }
+    diff = out;
+  }
+  // The whole picture always shifts a little in an edit; a door opening is far more.
+  const median = Float32Array.from(diff).sort()[diff.length >> 1];
+  const changed = (i) => diff[i] > Math.max(24, median * 3);
+  const seen = new Uint8Array(W * H);
+  const doors = (scene.doors ?? []).filter((d) => doorLike(d, true));
+  let best = null;
+  for (let start = 0; start < W * H; start++) {
+    if (seen[start] || !changed(start)) continue;
+    const stack = [start];
+    seen[start] = 1;
+    let count = 0, x0 = W, y0 = H, x1 = 0, y1 = 0;
+    while (stack.length) {
+      const i = stack.pop();
+      const x = i % W, y = (i - x) / W;
+      count += 1;
+      x0 = Math.min(x0, x);
+      x1 = Math.max(x1, x);
+      y0 = Math.min(y0, y);
+      y1 = Math.max(y1, y);
+      for (const n of [x > 0 ? i - 1 : -1, x < W - 1 ? i + 1 : -1, i - W, i + W]) {
+        if (n < 0 || n >= W * H || seen[n] || !changed(n)) continue;
+        seen[n] = 1;
+        stack.push(n);
+      }
+    }
+    if (count < W * H * 0.01) continue;
+    const patch = { x: x0 / W, y: y0 / H, w: (x1 + 1 - x0) / W, h: (y1 + 1 - y0) / H };
+    // The door it belongs to: the SAM door the change lies on or right beside (a door
+    // sliding aside opens the doorway next to where its box was).
+    const cover = (d) => {
+      const dx = d.x - d.w * 0.6, dw = d.w * 2.2;
+      const w = Math.max(0, Math.min(dx + dw, patch.x + patch.w) - Math.max(dx, patch.x));
+      const h = Math.max(0, Math.min(d.y + d.h, patch.y + patch.h) - Math.max(d.y, patch.y));
+      return (w * h) / (patch.w * patch.h);
+    };
+    const door = [...doors].sort((p, q) => cover(q) - cover(p))[0];
+    if (!door || cover(door) < 0.5) continue;
+    if (!best || count > best.count) best = { count, patch, door };
+  }
+  if (!best) return null;
+  const { patch, door } = best;
+  const pad = 0.015;
+  const x = Math.max(0, Math.min(patch.x, door.x) - pad);
+  const y = Math.max(0, Math.min(patch.y, door.y) - pad);
+  const region = { x, y, w: Math.min(1, Math.max(patch.x + patch.w, door.x + door.w) + pad) - x, h: Math.min(1, Math.max(patch.y + patch.h, door.y + door.h) + pad) - y };
+  if (region.w * region.h > 0.45) return null; // the edit changed far more than a door
+  // An open door is a doorway gone dark. Where it went dark is the side the door opens
+  // from; too little of it, and the door did not really open: nothing moves.
+  let dark = 0, total = 0, sumX = 0;
+  for (let yy = Math.floor(region.y * H); yy < Math.min(H, Math.ceil((region.y + region.h) * H)); yy++)
+    for (let xx = Math.floor(region.x * W); xx < Math.min(W, Math.ceil((region.x + region.w) * W)); xx++) {
+      const i = (yy * W + xx) * 4;
+      const after = (b[i] + b[i + 1] + b[i + 2]) / 3;
+      const drop = (a[i] + a[i + 1] + a[i + 2]) / 3 - after;
+      total += 1;
+      if (after < 55 && drop > 35) {
+        dark += 1;
+        sumX += xx / W;
+      }
+    }
+  if (dark < total * 0.05) return null;
+  const fromRight = sumX / dark > region.x + region.w / 2;
+  // The open door alone, with soft edges (a small mask, smoothly enlarged), and the
+  // picture as it is once the door is open.
+  const NW = closed.naturalWidth, NH = closed.naturalHeight;
+  const mask = document.createElement('canvas');
+  mask.width = 96;
+  mask.height = Math.round((96 * NH) / NW);
+  const m = mask.getContext('2d');
+  m.fillStyle = '#000';
+  m.fillRect(region.x * mask.width, region.y * mask.height, region.w * mask.width, region.h * mask.height);
+  const layer = document.createElement('canvas');
+  layer.width = NW;
+  layer.height = NH;
+  const g = layer.getContext('2d');
+  g.drawImage(open, 0, 0, NW, NH);
+  g.globalCompositeOperation = 'destination-in';
+  g.imageSmoothingEnabled = true;
+  g.drawImage(mask, 0, 0, NW, NH);
+  const still = document.createElement('canvas');
+  still.width = NW;
+  still.height = NH;
+  const sg = still.getContext('2d');
+  sg.drawImage(closed, 0, 0, NW, NH);
+  sg.drawImage(layer, 0, 0);
+  const blob = await new Promise((resolve) => still.toBlob(resolve, 'image/jpeg', 0.93));
+  if (!blob) return null;
+  return { door, region, fromRight, layer, still: URL.createObjectURL(blob) };
+}
+
+// Opening: the open door sweeps in across its own patch, from the side it opens away
+// from. Returns the place as it now looks (the door open), to walk on from.
+async function openDoor() {
   const scene = currentScene();
-  let corners = await sheetCorners(scene.photo, spot, 'door');
-  // The close-up door faces you: its box is its outline unless the corners clearly fit.
-  if (scene.id === 'door' && (!corners || quadFill(corners, spot) < 0.75)) corners = boxCorners(spot);
-  if (!corners) return null; // not sure where the door's edges are: nothing moves
-  const polygon = `polygon(${corners.map(([x, y]) => `${(x * 100).toFixed(2)}% ${(y * 100).toFixed(2)}%`).join(', ')})`;
-  const leaf = $('#door-leaf');
-  leaf.style.backgroundImage = `url("${scene.photo}")`;
-  leaf.style.clipPath = polygon;
-  const gap = $('#door-gap');
-  gap.style.clipPath = polygon;
-  const xs = corners.map(([x]) => x);
-  const left = Math.min(...xs), right = Math.max(...xs);
-  // The hinge is on the side nearer the edge of the picture.
-  const hinge = left + right > 1 ? right : left;
-  return { leaf, gap, hinge, left, right };
-}
-
-// Opening: a hinged door swings in on its hinge; the classroom door slides aside.
-async function openDoor(spot) {
+  const opening = await Promise.race([doorOpening(scene), pause(1200).then(() => null)]);
   state.audio?.slideDoor();
-  if (REDUCED_MOTION || !spot) return pause(400);
-  const door = await doorLeaf(spot);
-  if (!door) return pause(500);
-  const { leaf, gap, hinge, left, right } = door;
-  gap.hidden = false;
-  leaf.hidden = false;
-  leaf.style.transformOrigin = `${hinge * 100}% 50%`;
-  const sliding = currentScene()?.id === 'door';
-  const shift = (right - left) * 0.85 * (hinge > 0.5 ? 1 : -1) * 100;
-  const frames = sliding
-    ? [{ transform: 'translateX(0)' }, { transform: `translateX(${shift}%)` }]
-    : [{ transform: 'scaleX(1)', filter: 'brightness(1)' }, { transform: 'scaleX(0.12)', filter: 'brightness(0.55)' }];
-  gap.animate([{ opacity: 0 }, { opacity: 1, offset: 0.15 }, { opacity: 1 }], { duration: 900, fill: 'forwards' });
-  await leaf.animate(frames, { duration: 900, easing: 'ease-in-out', fill: 'forwards' }).finished;
-}
-
-// The door and its darkness fade as you step through, so nothing stays while you move.
-function closeDoorGap() {
-  for (const part of [$('#door-gap'), $('#door-leaf')]) {
-    if (part.hidden) continue;
-    const kept = part.getAnimations();
-    part.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 300, easing: 'ease-out', fill: 'forwards' }).finished.then(() => {
-      kept.forEach((a) => a.cancel());
-      part.getAnimations().forEach((a) => a.cancel());
-      part.hidden = true;
+  if (!opening) return pause(500).then(() => null);
+  const photo = $('#photo');
+  if (!REDUCED_MOTION) {
+    const canvas = $('#door-open');
+    const { layer, region, fromRight } = opening;
+    canvas.width = layer.width;
+    canvas.height = layer.height;
+    const g = canvas.getContext('2d');
+    const x0 = region.x * layer.width, x1 = (region.x + region.w) * layer.width;
+    const soft = (x1 - x0) * 0.3;
+    const draw = (p) => {
+      const edge = fromRight ? x1 - p * (x1 - x0 + soft) : x0 + p * (x1 - x0 + soft);
+      g.globalCompositeOperation = 'source-over';
+      g.clearRect(0, 0, canvas.width, canvas.height);
+      g.drawImage(layer, 0, 0);
+      g.globalCompositeOperation = 'destination-in';
+      const sweep = g.createLinearGradient(edge, 0, fromRight ? edge + soft : edge - soft, 0);
+      sweep.addColorStop(0, 'rgba(0,0,0,0)');
+      sweep.addColorStop(1, 'rgba(0,0,0,1)');
+      g.fillStyle = sweep;
+      g.fillRect(0, 0, canvas.width, canvas.height);
+    };
+    draw(0);
+    canvas.hidden = false;
+    const ms = 850;
+    const start = performance.now();
+    await new Promise((resolve) => {
+      const tick = (now) => {
+        const k = Math.min(1, (now - start) / ms);
+        draw(k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2);
+        if (k < 1) requestAnimationFrame(tick);
+        else resolve();
+      };
+      requestAnimationFrame(tick);
     });
   }
+  photo.src = opening.still; // the same picture, now as the photo under everything
+  await photo.decode().catch(() => {});
+  $('#door-open').hidden = true;
+  await pause(250);
+  return { ...scene, photo: opening.still };
 }
 
 // A frame that is there for a moment and gone: a stinger, the room shakes, then black.
@@ -1682,6 +1836,7 @@ function flicker() {
 // ---------- moving between photos ----------
 
 function render(scene) {
+  stopDarkWalk?.();
   trackPlace(scene.id);
   placeDateStamp();
   $('#stage').classList.remove('blackout');
@@ -1704,19 +1859,19 @@ function clearOverlays() {
     $(id).hidden = true;
   }
   $('#hotspots').replaceChildren();
+  $('#door-open').hidden = true;
   $('#board-name').hidden = true;
   $('#board-choices').hidden = true;
   $('#marks').replaceChildren();
   tvStatic(null, false);
 }
 
-async function stepInto(scene) {
+async function stepInto(scene, from = currentScene()) {
   const photo = $('#photo');
   const next = $('#photo-next');
   clearOverlays();
   const follow = followed();
   if (walker) {
-    const from = currentScene();
     const walked = await walk3d(async () => {
       await walker.walk(from, scene, WALK_MS, { warp: warpNow(), onStart: () => state.audio?.footsteps(3, follow) });
       photo.src = scene.photo; // swap under the canvas so nothing flashes
@@ -1776,6 +1931,7 @@ function fillWalk(walk) {
     const view = res.view;
     walk.scenes[i] = view;
     preload(view.photo);
+    doorOpening(view); // the open door is measured before you get there
     if (state.walk === walk && state.sceneIndex === i) {
       walker?.forget(view.photo); // its depth map may have just arrived
       if (!state.busy) {
@@ -1822,7 +1978,10 @@ async function beginWalk(walk, line, sound) {
   if (!state.last) fetchLines();
   preload(walk.flicker?.photo);
   preload(walk.scare?.photo);
-  walk.scenes.forEach((scene) => preload(scene.photo));
+  walk.scenes.forEach((scene) => {
+    preload(scene.photo);
+    doorOpening(scene);
+  });
   applySound(sound);
   show('walk-screen');
   say(line ?? '');
@@ -1844,7 +2003,7 @@ function onArrive(scene) {
   if (isEndingScene(scene)) rollCall(scene);
 }
 
-async function advance(spot) {
+async function advance() {
   if (state.busy) return;
   const from = currentScene();
   const next = state.sceneIndex + 1;
@@ -1862,15 +2021,14 @@ async function advance(spot) {
     // Only the second walk has someone behind the door; wait for that frame, never longer.
     if (from.id === 'door' && state.walk.pending && state.walk.index === 1) await extraOf(state.walk, 'scare', 8000);
     const scare = state.walk.scare?.after === from.id ? state.walk.scare : null;
-    if (from.id === 'door') await openDoor(spot);
-    closeDoorGap();
+    const leaving = (from.id === 'door' && (await openDoor())) || from;
     if (scare) {
       // The door opens onto the corridor where you started, and someone is in it.
       await jumpScare(scare.photo);
       state.sceneIndex = next;
       await arriveAt(scene);
     } else {
-      await stepInto(scene);
+      await stepInto(scene, leaving);
       state.sceneIndex = next;
     }
     render(scene);

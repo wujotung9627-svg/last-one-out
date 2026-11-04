@@ -49,6 +49,9 @@ try {
   const views = await Promise.all(school.walk.scenes.map((s) => post('/api/scene', { schoolId, id: s.id })));
   check(views.every((v) => v.view.doors.length > 0), 'every scene has a door to click');
   check(Boolean(views[2].view.board), 'the classroom chalkboard is found');
+  const opened = await post('/api/opened', { schoolId, photo: views[1].view.photo });
+  check(typeof opened.opened === 'string' && opened.opened !== views[1].view.photo, 'the classroom door has a photo with it open');
+  check((await post('/api/opened', { schoolId, photo: views[0].view.photo })).opened === null, 'only the door photo is ever opened');
   check(views[2].bible?.scores?.length === 3, 'the bible reaches the page with the rest of the walk');
 
   const lines = await post('/api/lines', { schoolId });

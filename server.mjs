@@ -102,6 +102,8 @@ function limiter(max) {
     });
 }
 const imageSlot = limiter(Number(process.env.IMAGE_CONCURRENCY || 8));
+// The opened doors queue on their own, so they never hold up a photo you walk into.
+const doorSlot = limiter(2);
 
 // Each background version of the next walk runs in its own context. Once the player
 // keeps a line, the other two are cancelled: their queued model calls never start.
@@ -183,8 +185,8 @@ async function generateImage(prompt) {
   return imageBytes(data);
 }
 
-async function editImage(bytes, prompt) {
-  const data = await imageSlot(() =>
+async function editImage(bytes, prompt, slot = imageSlot) {
+  const data = await slot(() =>
     callModel('/images/edits', {
       model: IMAGE_MODEL,
       prompt,
@@ -793,6 +795,7 @@ function startFirstWalk(school, patience = 0) {
     v.full.catch(() => {});
   }
   school.pendingViews = views;
+  photos.door.then(openedDoor, () => {});
   // The next lines are dealt as soon as the bible and the photos the next walk edits
   // exist (the corridor and the door; the next walk ends in the office, not here).
   school.firstReady = (async () => {
@@ -1061,6 +1064,31 @@ async function teacherScare(school) {
   }
 }
 
+// The classroom door, opened: the same close-up with the door standing open onto the
+// dark room. The page shows it only where the door is, so the door is the only thing
+// that moves. One per door photo, kept for the walk; a failure is retried when asked.
+const DOOR_OPENED = [
+  'Open the classroom door nearest the camera all the way, so its doorway stands fully open and shows the unlit classroom inside, almost completely dark.',
+  'Keep everything else exactly the same: same camera position and angle, same lighting, same objects in front of the door, same photographic style. Do not add any people or figures.',
+].join(' ');
+const openedDoors = new Map();
+
+function openedDoor(photoId) {
+  if (!openedDoors.has(photoId)) {
+    const made = (async () => {
+      if (MOCK) return `/photos/${await savePhoto(mockPhoto('door', { walk: 0, changes: [], note: 'the door stands open' }))}`;
+      const { bytes } = await readPhoto(photoId);
+      return `/photos/${await savePhoto(await editImage(bytes, DOOR_OPENED, doorSlot))}`;
+    })().catch((err) => {
+      if (!(err instanceof Cancelled)) console.error(`[door] ${err.message}`);
+      openedDoors.delete(photoId);
+      return null;
+    });
+    openedDoors.set(photoId, made);
+  }
+  return openedDoors.get(photoId);
+}
+
 // The second scare. The classroom you walk into is full, backs to you; at roll call
 // every head turns. If the crowd is refused, the lights go out instead.
 // The full class, seen from behind: the room you walk into on the last walk.
@@ -1139,6 +1167,7 @@ function renderOption(school, loop, cardOrPromise, corridorEdit = null) {
     return { id: 'corridor', photo: `/photos/${photoId}`, depth: null, doors: marked };
   });
   const flicker = quiet(photos.corridor.then((photoId) => flickerFrame(photoId, loop)));
+  photos.door?.then(openedDoor, () => {});
   let scare = Promise.resolve(null);
   if (loop === 1) scare = Promise.resolve(school.scare1).then((photo) => (photo ? { after: 'door', kind: 'teacher', photo } : null));
   if (last) {
@@ -1380,6 +1409,16 @@ const routes = {
     return { [want]: (await school.pendingExtras?.[want]) ?? null };
   },
 
+  // The close-up of the classroom door with the door open, once it is ready (or null).
+  'POST /api/opened': async (body) => {
+    const school = getSchool(body.schoolId);
+    const photoId = String(body.photo ?? '').replace(/^\/photos\//, '');
+    // Only a door photo of this school; anything else is never sent to the image model.
+    const ours = ID.test(photoId) && (photoId === school.photos.door || photoId === school.first?.door || school.record.walks.some((w) => w.scenes.some((s) => s.id === 'door' && s.photo === `/photos/${photoId}`)));
+    const made = openedDoors.get(photoId) ?? (ours ? openedDoor(photoId) : null);
+    return { opened: made ? await Promise.race([made, new Promise((r) => setTimeout(() => r(null), 45_000))]) : null };
+  },
+
   // Keeping a chalk line. Its walk was rendered in the background; this waits for it.
   'POST /api/draw': async (body) => {
     const school = getSchool(body.schoolId);
@@ -1491,7 +1530,10 @@ async function saveRun(school, ending) {
     school.record.walks.map(async (walk) => ({
       ...walk,
       scenes: await Promise.all(
-        walk.scenes.map(async (scene) => ({ ...scene, photo: await local(scene.photo), depth: await local(scene.depth), after: await local(scene.after) })),
+        walk.scenes.map(async (scene) => {
+          const opened = scene.id === 'door' ? await openedDoors.get(scene.photo.slice('/photos/'.length)) : null;
+          return { ...scene, photo: await local(scene.photo), depth: await local(scene.depth), after: await local(scene.after), ...(opened ? { opened: await local(opened) } : {}) };
+        }),
       ),
       flicker: await frame(walk.flicker),
       scare: await frame(walk.scare),
