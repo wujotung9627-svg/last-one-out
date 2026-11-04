@@ -1022,6 +1022,11 @@ export function createAudio() {
   const E4 = 329.63;
 
   return {
+    // The game's own audio context, already running: the microphone listens through it.
+    get context() {
+      resume();
+      return ctx;
+    },
     // follow: after you stop, one more step sounds somewhere behind you.
     footsteps(count = 3, follow = false) {
       resume();

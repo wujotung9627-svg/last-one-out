@@ -68,7 +68,7 @@ export function createVoice() {
   }
 
   async function open() {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
     micAllowed = true;
     return stream;
   }
@@ -114,7 +114,9 @@ export function createVoice() {
 
     // Listens for up to ms. Speech = a few loud frames above the room's own noise.
     // { heard, recording } where recording is a WAV of the answer when asked for.
-    listen({ ms = 9000, record = false } = {}) {
+    // context: an audio context that is already running (one made here, long after the
+    // last click, may stay suspended and hear nothing).
+    listen({ ms = 9000, record = false, context = null } = {}) {
       let cancelled = false;
       const result = (async () => {
         let stream;
@@ -126,11 +128,12 @@ export function createVoice() {
           while (!cancelled && performance.now() < until) await pause(100);
           return { heard: false, recording: null };
         }
-        const ctx = new AudioContext();
+        const ctx = context && context.state !== 'closed' ? context : new AudioContext();
         await ctx.resume().catch(() => {});
         const analyser = ctx.createAnalyser();
         analyser.fftSize = 1024;
-        ctx.createMediaStreamSource(stream).connect(analyser);
+        const source = ctx.createMediaStreamSource(stream);
+        source.connect(analyser);
         const samples = new Float32Array(analyser.fftSize);
         const chunks = [];
         const recorder = record ? new MediaRecorder(stream) : null;
@@ -139,6 +142,9 @@ export function createVoice() {
           recorder.start();
         }
         const started = performance.now();
+        // The room's own level first (its middle value, so the tail of the speaker does
+        // not count); a voice is clearly above it, for a tenth of a second.
+        const quiet = [];
         let floor = 0;
         let loud = 0;
         let heardAt = null;
@@ -150,12 +156,13 @@ export function createVoice() {
           const rms = Math.sqrt(sum / samples.length);
           const now = performance.now() - started;
           if (now < 450) {
-            floor = Math.max(floor, rms);
+            quiet.push(rms);
+            floor = [...quiet].sort((a, z) => a - z)[quiet.length >> 1];
             continue;
           }
           if (heardAt === null) {
-            loud = rms > Math.max(0.02, floor * 3) ? loud + 1 : 0;
-            if (loud >= 3) heardAt = now;
+            loud = rms > Math.max(0.01, Math.min(floor * 2.5, 0.04)) ? loud + 1 : 0;
+            if (loud >= 2) heardAt = now;
           }
           if (cancelled || now > ms || (heardAt !== null && now - heardAt > 1100)) break;
         }
@@ -168,7 +175,8 @@ export function createVoice() {
           if (heardAt !== null && !cancelled) recording = await toWav(new Blob(chunks, { type: recorder.mimeType })).catch(() => null);
         }
         stream.getTracks().forEach((track) => track.stop());
-        ctx.close();
+        source.disconnect();
+        if (ctx !== context) ctx.close();
         return { heard: heardAt !== null, recording };
       })();
       return {

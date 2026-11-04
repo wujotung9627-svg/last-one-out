@@ -1144,6 +1144,7 @@ async function placeChoices(scene) {
   if (!isChoiceScene(scene)) {
     layer.replaceChildren();
     layer.hidden = true;
+    $('#board-read').hidden = true;
     return;
   }
   const plane = await boardPlane(scene);
@@ -1173,6 +1174,45 @@ async function placeChoices(scene) {
       return line;
     }),
   );
+  placeBoardRead();
+}
+
+// The board can be far away in the photo. The same three lines are also written large
+// along the bottom of the picture, as if read up close: erase them there or on the board.
+function placeBoardRead() {
+  const panel = $('#board-read');
+  const lines = [...$('#board-choices').children];
+  if ($('#board-choices').hidden || !lines.length) {
+    panel.hidden = true;
+    return;
+  }
+  panel.replaceChildren(
+    ...lines.map((line, i) => {
+      const item = el('button', line.textContent, 'read-line');
+      item.type = 'button';
+      if (line.classList.contains('gone') || line.classList.contains('erased')) item.classList.add('erased');
+      if (line.classList.contains('kept')) item.classList.add('kept');
+      item.disabled = line.disabled;
+      item.addEventListener('click', () => eraseLine(i));
+      item.addEventListener('mouseenter', () => line.classList.add('lit'));
+      item.addEventListener('mouseleave', () => line.classList.remove('lit'));
+      return item;
+    }),
+  );
+  panel.hidden = false;
+}
+
+// What the board says now, line by line, in the panel too.
+function syncBoardRead() {
+  const items = [...$('#board-read').children];
+  [...$('#board-choices').children].forEach((line, i) => {
+    const item = items[i];
+    if (!item) return;
+    item.textContent = line.textContent;
+    item.disabled = line.disabled;
+    item.classList.toggle('erased', line.classList.contains('erased') || line.classList.contains('gone'));
+    item.classList.toggle('kept', line.classList.contains('kept'));
+  });
 }
 
 function fitKeptLine(line, board, text) {
@@ -1200,6 +1240,7 @@ function eraseLine(index) {
   state.audio?.erase();
   if (state.lines?.fixed === index) {
     line?.animate([{ transform: 'translateY(-50%)' }, { transform: 'translate(-3px, -50%)' }, { transform: 'translate(3px, -50%)' }, { transform: 'translateY(-50%)' }], { duration: 380 });
+    $('#board-read').children[index]?.animate([{ transform: 'translateX(0)' }, { transform: 'translateX(-3px)' }, { transform: 'translateX(3px)' }, { transform: 'translateX(0)' }], { duration: 380 });
     say(t('wontErase'));
     return;
   }
@@ -1209,6 +1250,7 @@ function eraseLine(index) {
     line.disabled = true;
     line.classList.add('erased');
   }
+  syncBoardRead();
   api('/api/erase', { schoolId: state.schoolId, index }).catch(() => {});
   if (state.erased.size >= 2) {
     const kept = [0, 1, 2].find((i) => !state.erased.has(i));
@@ -1228,6 +1270,7 @@ function choose(index) {
     if (i === index) line.classList.add('kept');
     else if (!state.erased.has(i)) line.classList.add('erased');
   });
+  syncBoardRead();
   say(t('changing'));
   placeHotspots(scene);
   pick.promise = api('/api/draw', { schoolId: state.schoolId, index });
@@ -1242,6 +1285,8 @@ function choose(index) {
       if (kept) {
         fitKeptLine(kept, scene.board, words.title);
         chalkWrite(kept, words.title);
+        const read = $('#board-read').children[index];
+        if (read) read.textContent = words.title;
       }
       state.audio?.chalk(1.2);
       say(words.whisper);
@@ -2065,6 +2110,7 @@ function clearOverlays() {
   $('#door-open').hidden = true;
   $('#board-name').hidden = true;
   $('#board-choices').hidden = true;
+  $('#board-read').hidden = true;
   $('#marks').replaceChildren();
   tvStatic(null, false);
 }
@@ -2323,7 +2369,7 @@ function waitForAnswer(ms) {
       resolve(result);
     };
     button.onclick = () => finishWith({ heard: true, recording: null, spoken: false, after: (performance.now() - asked) / 1000 });
-    const listening = voice.listen({ ms, record: state.live });
+    const listening = voice.listen({ ms, record: state.live, context: state.audio?.context });
     listening.result.then((result) => finishWith({ ...result, spoken: Boolean(result.heard), after: (performance.now() - asked) / 1000 }));
   });
 }
