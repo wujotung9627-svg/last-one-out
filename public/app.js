@@ -43,6 +43,10 @@ const LINES = {
     tag: 'In Taiwan, the student on duty is the last one out.',
     nameLabel: 'Your name',
     nameHint: 'Stays on this device. It is never sent anywhere.',
+    sayName: 'Say it',
+    nameSaid: 'Heard ✓',
+    nameVoiceHint: 'Say your name once. At roll call the school speaker will call it in your own voice. The recording stays on this device.',
+    paOffice: 'Student on duty, please come to the teachers’ office now.',
     yearLabel: 'The year you were on duty there',
     memoriesLabel: 'Three things you remember about your school',
     memory1: 'e.g. a banyan tree at the end of the corridor',
@@ -98,6 +102,10 @@ const LINES = {
     tag: '在台灣，值日生是最後一個離開教室的人。',
     nameLabel: '你的名字',
     nameHint: '只留在這台裝置上，不會傳出去。',
+    sayName: '唸一次',
+    nameSaid: '錄好了 ✓',
+    nameVoiceHint: '唸一次你的名字。點名時，學校廣播會用你自己的聲音叫你。錄音只留在這台裝置上。',
+    paOffice: '值日生，請馬上到辦公室來。',
     yearLabel: '你在那裡當值日生的那一年',
     memoriesLabel: '寫下三件你記得的學校的事',
     memory1: '例：走廊盡頭有一棵大榕樹',
@@ -448,11 +456,24 @@ async function guarded(waitingText, task) {
 
 // The chime, then a voice from the speaker. The browser speaks it with a voice on
 // this device, so the player's name never leaves it.
-async function announce(text) {
+// A real recorded voice when there is one (sounds/pa-<key>-<lang>.mp3); otherwise the
+// device's own voice.
+async function announce(text, key) {
   if (!$('#walk-screen').hidden && $('#intro').hidden) say(text);
   state.audio?.speaker();
   await pause(2300);
+  if (key && (await state.audio?.loudspeaker(`pa-${key}-${state.lang}.mp3`))) return;
   await voice.speak(text, state.lang);
+}
+
+// Your name on the school speaker: in your own voice if you said it at the start, else
+// a recorded voice calling the student on duty, else the device's voice.
+async function callName(name, { second = false, louder = false } = {}) {
+  const speaker = state.audio?.loudspeaker;
+  if (state.nameVoice && speaker && (await state.audio.loudspeaker(state.nameVoice, { rate: second ? 0.86 : 1, gain: louder ? 1.3 : 1 }))) return;
+  if (speaker && (await state.audio.loudspeaker(`pa-${second || louder ? 'duty-again' : 'duty'}-${state.lang}.mp3`, { gain: louder ? 1.3 : 1 }))) return;
+  if (second) await voice.speak(state.lang === 'zh' ? `${[...name].join('，')}？` : `${name}?`, state.lang, { slow: !louder, louder });
+  else await voice.speak(state.lang === 'zh' ? `${name}。` : `${name}.`, state.lang);
 }
 
 // ---------- sound ----------
@@ -503,15 +524,34 @@ const isEndingScene = (scene) => scene.id === 'classroom' && state.last;
 // Only boxes shaped like a door: SAM sometimes calls the whole corridor a door.
 // (The door scene is a close-up, so its door may be wide.)
 const doorLike = (b, wide) => b.w <= (wide ? 0.62 : 0.32) && b.h >= b.w * (wide ? 0.9 : 1.3);
-const doorsOf = (scene) => (scene.doors ?? []).filter((b) => doorLike(b, scene.id === 'door'));
+const boxOverlap = (a, b) => {
+  const w = Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x));
+  const h = Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+  return (w * h) / Math.min(a.w * a.h, b.w * b.h);
+};
 
+// The doors of a place, largest (nearest) first, each door once: SAM can box the same
+// door twice, and one half must not be locked while the other opens. In the close-up
+// of the classroom door, that door is the only one: windows there are not doors.
+function doorsOf(scene) {
+  if (scene.doorList) return scene.doorList;
+  const kept = [];
+  for (const b of [...(scene.doors ?? [])].filter((d) => doorLike(d, scene.id === 'door')).sort((a, z) => z.w * z.h - a.w * a.h)) {
+    if (kept.every((k) => boxOverlap(b, k) < 0.3)) kept.push(b);
+  }
+  const list = scene.id === 'door' ? kept.slice(0, 1) : kept;
+  Object.defineProperty(scene, 'doorList', { value: list, enumerable: false });
+  return list;
+}
+
+// The way on: the nearest door; on the second walk, a different one.
 function forwardDoor(scene) {
   if (scene.id === 'corridor' && state.walk.index === 1 && doorsOf(scene).length > 1) return 1;
   return 0;
 }
 
-// A door that stands open is never "locked": every open door leads on.
-const leadsOn = (scene, spot, i) => i === forwardDoor(scene) || Boolean(spot.open);
+// A door that stands open is never "locked": in the corridor every open door leads on.
+const leadsOn = (scene, spot, i) => i === forwardDoor(scene) || (scene.id === 'corridor' && Boolean(spot.open) && spot.h >= 0.2);
 
 function placeHotspots(scene) {
   const layer = $('#hotspots');
@@ -823,6 +863,13 @@ function onCorners(w, h, [p0, p1, p2, p3]) {
   const a = p1[0] - p0[0] + g * p1[0], b = p3[0] - p0[0] + k * p3[0], c = p0[0];
   const d = p1[1] - p0[1] + g * p1[1], e = p3[1] - p0[1] + k * p3[1], f = p0[1];
   return `matrix3d(${a / w},${d / w},0,${g / w},${b / h},${e / h},0,${k / h},0,0,1,0,${c},${f},0,1)`;
+}
+
+// How much of a box the four corners cover (1 = all of it).
+function quadFill(corners, b) {
+  let a = 0;
+  for (let k = 0; k < 4; k++) a += corners[k][0] * corners[(k + 1) % 4][1] - corners[(k + 1) % 4][0] * corners[k][1];
+  return Math.abs(a) / 2 / (b.w * b.h);
 }
 
 // Four corners in stage pixels, for a box when nothing better was found.
@@ -1410,7 +1457,9 @@ async function tvStatic(scene, on) {
 // A door is its own piece of the photo, cut along its four corners. Behind it, the dark.
 async function doorLeaf(spot) {
   const scene = currentScene();
-  const corners = (await sheetCorners(scene.photo, spot, 'door')) ?? (scene.id === 'door' ? boxCorners(spot) : null);
+  let corners = await sheetCorners(scene.photo, spot, 'door');
+  // The close-up door faces you: its box is its outline unless the corners clearly fit.
+  if (scene.id === 'door' && (!corners || quadFill(corners, spot) < 0.75)) corners = boxCorners(spot);
   if (!corners) return null; // not sure where the door's edges are: nothing moves
   const polygon = `polygon(${corners.map(([x, y]) => `${(x * 100).toFixed(2)}% ${(y * 100).toFixed(2)}%`).join(', ')})`;
   const leaf = $('#door-leaf');
@@ -1697,8 +1746,8 @@ async function beginWalk(walk, line, sound) {
 // What happens when you reach a place.
 function onArrive(scene) {
   const index = state.walk.index;
-  if (scene.id === 'corridor' && index === 1 && state.bible?.pa) {
-    setTimeout(() => announce(state.bible.pa[state.lang] ?? state.bible.pa.en), 2200);
+  if (scene.id === 'corridor' && index === 1) {
+    setTimeout(() => announce(t('paOffice'), 'office'), 2200);
   }
   if (scene.id === 'corridor' && index === 2) setTimeout(() => ballThenFigure(), 2500);
   if (isEndingScene(scene)) rollCall(scene);
@@ -1752,16 +1801,18 @@ async function rollCall(scene) {
   try {
     await pause(2500);
     tvStatic(scene, true);
-    await announce(state.lang === 'zh' ? `${name}。` : `${name}.`);
+    say(state.lang === 'zh' ? `${name}。` : `${name}.`);
+    state.audio?.speaker();
+    await pause(2300);
+    await callName(name);
     await pause(900);
-    // The second time, slowly, one sound at a time.
-    await voice.speak(state.lang === 'zh' ? `${[...name].join('，')}？` : `${name}?`, state.lang, { slow: true });
+    await callName(name, { second: true }); // the second time, slower
     roll.hidden = false;
     say(t('rollCall'));
     let answer = await waitForAnswer(9000);
     let calls = 1;
     if (!answer.heard) {
-      await voice.speak(`${name}？`, state.lang, { louder: true });
+      await callName(name, { louder: true });
       answer = await waitForAnswer(9000);
       calls = 2;
     } else if (answer.recording && state.live) {
@@ -1769,7 +1820,7 @@ async function rollCall(scene) {
       if (words && !ANSWER.test(words)) {
         say(t('wrongAnswer'));
         await pause(1200);
-        await voice.speak(`${name}？`, state.lang, { louder: true });
+        await callName(name, { louder: true });
         await waitForAnswer(7000);
       }
     }
@@ -2002,8 +2053,35 @@ $('#name').addEventListener('input', () => {
 
 // ---------- speaking your memories ----------
 
+// Say your name once at the start; it never leaves the browser.
+function setupNameVoice() {
+  const button = $('#name-voice');
+  if (!button) return;
+  button.hidden = !voice.canRecord;
+  button.textContent = t('sayName');
+  button.addEventListener('click', async () => {
+    if (button.classList.contains('recording')) return;
+    state.audio ??= createAudio(); // from a click
+    button.classList.add('recording');
+    button.textContent = t('stop');
+    showError('');
+    try {
+      const { heard, recording } = await voice.listen({ ms: 6000, record: true }).result;
+      if (!heard || !recording) throw new Error('nothing heard');
+      state.nameVoice = recording;
+      button.textContent = t('nameSaid');
+      state.audio?.loudspeaker(recording); // you hear it on the speaker once
+    } catch {
+      showError(t('micFailed'));
+      button.textContent = t('sayName');
+    } finally {
+      button.classList.remove('recording');
+    }
+  });
+}
+
 function setupDictation() {
-  for (const button of document.querySelectorAll('.mic')) {
+  for (const button of document.querySelectorAll('.mic[data-for]')) {
     const input = $(`#${button.dataset.for}`);
     button.hidden = !state.live || !voice.canRecord;
     button.addEventListener('click', async () => {
@@ -2043,7 +2121,7 @@ async function intro(memories, year) {
   line.textContent = '';
   await pause(600);
   typeLine(line, t('paHome'));
-  await announce(t('paHome'));
+  await announce(t('paHome'), 'home');
   await pause(700);
   for (const memory of memories) {
     typeLine(line, memory);
@@ -2214,6 +2292,7 @@ async function prepare() {
     }
   }
   setupDictation();
+  setupNameVoice();
 }
 
 for (const button of document.querySelectorAll('.lang-switch button')) {

@@ -46,8 +46,12 @@
       <p class="tag" data-text="tag"></p>
       <form id="start-form">
         <label for="name" data-text="nameLabel"></label>
-        <input id="name" maxlength="20" autocomplete="off" required>
+        <div class="memory-row">
+          <input id="name" maxlength="20" autocomplete="off" required>
+          <button id="name-voice" class="mic" type="button" data-text="sayName" hidden></button>
+        </div>
         <p class="hint" data-text="nameHint"></p>
+        <p class="hint" data-text="nameVoiceHint"></p>
         <label for="year" data-text="yearLabel"></label>
         <input id="year" type="number" inputmode="numeric" min="1950" step="1">
         <fieldset>

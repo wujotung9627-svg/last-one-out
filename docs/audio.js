@@ -733,6 +733,101 @@ export function createAudio() {
     if (samples.quick) quickSlices = onsets(samples.quick, { minGap: 0.14 });
   });
 
+  // ---------- the school loudspeaker ----------
+  // A real voice through an old horn speaker high up in the corridor: telephone band,
+  // a little breakup, mains hum and hiss under it, and the corridor answering back.
+  function loudspeaker(buffer, { rate = 1, gain = 1 } = {}) {
+    const at = ctx.currentTime + 0.05;
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.playbackRate.value = rate;
+    const low = ctx.createBiquadFilter();
+    low.type = 'highpass';
+    low.frequency.value = 420;
+    const high = ctx.createBiquadFilter();
+    high.type = 'lowpass';
+    high.frequency.value = 3000;
+    const horn = ctx.createBiquadFilter(); // the horn's nasal peak
+    horn.type = 'peaking';
+    horn.frequency.value = 1500;
+    horn.Q.value = 1.4;
+    horn.gain.value = 7;
+    const drive = ctx.createWaveShaper();
+    const curve = new Float32Array(1024);
+    for (let i = 0; i < curve.length; i++) {
+      const x = (i / (curve.length - 1)) * 2 - 1;
+      curve[i] = Math.tanh(x * 3.2) / Math.tanh(3.2);
+    }
+    drive.curve = curve;
+    const squash = ctx.createDynamicsCompressor();
+    squash.threshold.value = -26;
+    squash.ratio.value = 8;
+    const level = ctx.createGain();
+    level.gain.value = 0.9 * gain;
+    source.connect(low);
+    low.connect(high);
+    high.connect(horn);
+    horn.connect(drive);
+    drive.connect(squash);
+    squash.connect(level);
+    const out = placed(0, 2.4, -3); // up on the wall, ahead of you
+    level.connect(out);
+    // The far speakers down the corridor say it a moment later.
+    const far = ctx.createDelay(1);
+    far.delayTime.value = 0.19;
+    const farLevel = ctx.createGain();
+    farLevel.gain.value = 0.32 * gain;
+    level.connect(far);
+    far.connect(farLevel);
+    farLevel.connect(placed(0, 2.4, -14));
+    const length = buffer.duration / rate;
+    // Hiss and hum from the amplifier, there before the voice and after it.
+    const hiss = ctx.createBufferSource();
+    hiss.buffer = noise;
+    hiss.loop = true;
+    const hissBand = ctx.createBiquadFilter();
+    hissBand.type = 'bandpass';
+    hissBand.frequency.value = 2400;
+    hissBand.Q.value = 0.6;
+    const hissLevel = ctx.createGain();
+    hissLevel.gain.setValueAtTime(0, at - 0.04);
+    hissLevel.gain.linearRampToValueAtTime(0.035 * gain, at + 0.1);
+    hissLevel.gain.setValueAtTime(0.035 * gain, at + length + 0.5);
+    hissLevel.gain.linearRampToValueAtTime(0.0001, at + length + 0.9);
+    hiss.connect(hissBand);
+    hissBand.connect(hissLevel);
+    hissLevel.connect(out);
+    const mains = ctx.createOscillator();
+    mains.type = 'sawtooth';
+    mains.frequency.value = 60;
+    const mainsLevel = ctx.createGain();
+    mainsLevel.gain.setValueAtTime(0, at - 0.04);
+    mainsLevel.gain.linearRampToValueAtTime(0.012 * gain, at + 0.1);
+    mainsLevel.gain.setValueAtTime(0.012 * gain, at + length + 0.5);
+    mainsLevel.gain.linearRampToValueAtTime(0.0001, at + length + 0.9);
+    mains.connect(mainsLevel);
+    mainsLevel.connect(high);
+    source.start(at + 0.15);
+    hiss.start(at - 0.04);
+    mains.start(at - 0.04);
+    hiss.stop(at + length + 1);
+    mains.stop(at + length + 1);
+    for (let k = 0; k < 4; k++) burst(at + 0.15 + Math.random() * length, { type: 'highpass', freq: 3000, peak: 0.05 * gain, decay: 0.03, out });
+    return new Promise((resolve) => setTimeout(resolve, (length + 0.4) * 1000));
+  }
+
+  // A recorded voice in a file (sounds/), decoded once.
+  const voices = {};
+  async function voiceFile(file) {
+    if (!(file in voices)) {
+      voices[file] = fetch(`sounds/${file}`)
+        .then((res) => (res.ok ? res.arrayBuffer() : null))
+        .then((bytes) => (bytes ? ctx.decodeAudioData(bytes) : null))
+        .catch(() => null);
+    }
+    return voices[file];
+  }
+
   // Plays (part of) a recording. `into` sends it through a node the caller made
   // (a moving panner, a wall filter); `pos` places it in space; otherwise it plays
   // straight, with some of the corridor's reverb.
@@ -871,6 +966,18 @@ export function createAudio() {
     basketball(run) {
       resume();
       basketball(run);
+    },
+    // A real voice on the school speaker. `voice` is an AudioBuffer, a WAV/WebM Blob, or a
+    // file in sounds/. Resolves false when there is no such recording.
+    async loudspeaker(voice, options) {
+      resume();
+      let buffer = null;
+      if (voice instanceof AudioBuffer) buffer = voice;
+      else if (voice instanceof Blob) buffer = await ctx.decodeAudioData(await voice.arrayBuffer()).catch(() => null);
+      else if (typeof voice === 'string') buffer = await voiceFile(voice);
+      if (!buffer) return false;
+      await loudspeaker(buffer, options);
+      return true;
     },
     chalk(seconds) {
       resume();
