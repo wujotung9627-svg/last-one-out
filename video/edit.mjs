@@ -90,7 +90,8 @@ function beats() {
   };
   list.push({ id: 'title', start: Math.max(0, walkStart - 7), end: walkStart + 0.3, about: 'the title screen: name, year and three memories typed in' });
   list.push({ id: 'intro', start: walkStart, end: Math.max(walkStart + 3, firstPhotoAt - 0.3), about: describe(walkStart, firstPhotoAt) + '; text on black before the first photo' });
-  list.push({ id: 'arrive', start: firstPhotoAt - 0.5, end: (forward[0] ?? firstPhotoAt + 8) + 1.2, about: describe(firstPhotoAt - 0.5, forward[0] ?? firstPhotoAt + 8) + ' (the first photo of the school)' });
+  // (starts just after the photo appears: not a frame of the intro text on black)
+  list.push({ id: 'arrive', start: firstPhotoAt + 0.05, end: (forward[0] ?? firstPhotoAt + 8) + 1.2, about: describe(firstPhotoAt - 0.5, forward[0] ?? firstPhotoAt + 8) + ' (the first photo of the school)' });
   for (let i = 0; i < forward.length; i++) {
     const a = forward[i] - 0.3;
     const b = (i + 1 < forward.length ? forward[i + 1] : endingAt) + (i + 1 < forward.length ? 1.2 : 0);
@@ -189,7 +190,7 @@ function finalize(plan, list) {
     const b = byId[s.beat];
     const from = Math.max(b.start, Math.min(b.end - 3, s.from ?? b.start));
     const to = Math.min(b.end, Math.max(from + 3, s.to ?? b.end));
-    let start = snapIn(from), end = snapOut(to);
+    let start = Math.max(b.start, snapIn(from)), end = snapOut(to); // a shot never starts before its beat
     for (const [k0, k1, kind] of mustKeep()) {
       const [lo, hi] = kind === 'board' ? [start, end] : [b.start, b.end];
       if (k0 < hi && k1 > lo) (start = Math.min(start, Math.max(b.start, k0))), (end = Math.max(end, Math.min(LENGTH, k1)));
