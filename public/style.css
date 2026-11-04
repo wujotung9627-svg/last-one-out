@@ -680,3 +680,6 @@ html:lang(en) .credit-line { font: 1.8rem var(--hand-en); }
 /* Our own ranking sheet, pinned on the cork board when the photo has none to write on. */
 .ranking.pinned { background: #ecebe4; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.45); mix-blend-mode: normal; color: rgba(28, 28, 32, 0.82); }
 .ranking.pinned::before { content: ""; position: absolute; top: 1.5%; left: 50%; width: 5%; aspect-ratio: 1; margin-left: -2.5%; border-radius: 50%; background: #b8312a; }
+
+/* Walking on in the dark while the next place is not ready: barely lit, still moving. */
+#stage.dark-walk { filter: brightness(0.14) blur(1.5px); transition: filter 0.6s ease; }

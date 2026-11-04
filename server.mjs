@@ -953,6 +953,29 @@ async function quickTitles(school, loop) {
   }
 }
 
+// One edit for the corridor photo, written from the line alone: fast, so the corridor of
+// the next walk can be photographed while the other rooms are still being worked out.
+async function corridorEditFor(school, loop, line) {
+  if (MOCK || !line) return null;
+  try {
+    const text = await chat(
+      [
+        {
+          role: 'system',
+          content:
+            'You write ONE image-edit instruction in English (at most 50 words) for a night photo of an old Taiwanese school corridor, so that the given line is plainly visible in it: large, in the foreground or filling the corridor. Objects and places only: no people, no faces, no children, no readable text, no blood. Reply with the instruction only.',
+        },
+        { role: 'user', content: JSON.stringify({ line: line.title_en || line.title, memories: school.bible?.memories_en?.length ? school.bible.memories_en : school.memories, earlier: school.changes.map((c) => c.title_en || c.title) }) },
+      ],
+      { effort: 'minimal', maxTokens: 1200 },
+    );
+    return cleanText(text, 400) || null;
+  } catch (err) {
+    if (err.status === 402) throw err;
+    return null;
+  }
+}
+
 async function dealCards(school, loop, titles = null) {
   if (MOCK) return MOCK_DEALS[(loop - 1) % MOCK_DEALS.length];
   const ids = LOOPS[loop];
@@ -1073,18 +1096,28 @@ async function crowdTurned(classroomId, seated) {
 // One chalk line's version of the next walk, in stages: the corridor's photo and doors
 // come first (that is all you need to start walking); the other places, depth maps and
 // scares follow while you walk.
-function renderOption(school, loop, card) {
+// card may still be coming (a promise); corridorEdit, when given, is a quick edit for the
+// corridor written from the line alone, so the corridor need not wait for the card.
+function renderOption(school, loop, cardOrPromise, corridorEdit = null) {
   const ids = LOOPS[loop];
-  const changes = [...school.changes, card];
+  const cardP = Promise.resolve(cardOrPromise);
   const last = loop === LOOPS.length - 1;
+  const editFor = async (id) => {
+    if (id === 'corridor' && corridorEdit) {
+      const quick = await corridorEdit.catch(() => null);
+      if (quick) return quick;
+    }
+    return (await cardP).edits[id];
+  };
   const photos = Object.fromEntries(
     ids.map((id) => [
       id,
       (async () => {
         const previous = school.photos[id];
-        if (MOCK) return savePhoto(mockPhoto(id, { walk: loop, changes }));
-        if (!previous) return takePhoto(id, school, [card.edits[id], TRACES[loop]?.[id]].filter(Boolean).join(' ')); // first time in this room
-        const instruction = [card.edits[id], TRACES[loop]?.[id], last && id === 'classroom' ? FINAL_CLASSROOM : ''].filter(Boolean).join(' ');
+        if (MOCK) return savePhoto(mockPhoto(id, { walk: loop, changes: [...school.changes, await cardP] }));
+        const edit = await editFor(id);
+        if (!previous) return takePhoto(id, school, [edit, TRACES[loop]?.[id]].filter(Boolean).join(' ')); // first time in this room
+        const instruction = [edit, TRACES[loop]?.[id], last && id === 'classroom' ? FINAL_CLASSROOM : ''].filter(Boolean).join(' ');
         const fallback = [TRACES[loop]?.[id], last && id === 'classroom' ? FINAL_CLASSROOM.replace(/^Also /, '') : ''].filter(Boolean).join(' ');
         return instruction ? ((await editScene(id, previous, instruction, fallback)) ?? previous) : previous;
       })(),
@@ -1098,7 +1131,7 @@ function renderOption(school, loop, card) {
     }),
   );
   // The corridor without its depth map yet: enough to walk into.
-  photos.corridor.then(() => console.error(`[time] walk ${loop + 1} "${card.title}": corridor photo at ${since(school)}s`), () => {});
+  photos.corridor.then(() => console.error(`[time] walk ${loop + 1}: corridor photo at ${since(school)}s`), () => {});
   const corridor = photos.corridor.then(async (photoId) => {
     if (same('corridor', photoId)) return school.views.corridor;
     const [doors, open] = await Promise.all([findObjectsSafely(photoId, SCENES.corridor.concepts.doors, 'corridor'), findObjectsSafely(photoId, 'open door', 'corridor')]);
@@ -1119,13 +1152,13 @@ function renderOption(school, loop, card) {
   const figure = flicker.then((photo) => (photo ? { scene: 'corridor', photo } : null)).catch(() => null);
   const extras = Promise.all([figure, scare]).then(([f, frame]) => ({ flicker: f, scare: frame }));
   const photoIds = Promise.all(ids.map((id) => photos[id])).then((list) => Object.fromEntries(ids.map((id, i) => [id, list[i]])));
-  const done = Promise.all([photoIds, Promise.all(ids.map((id) => views[id].full)), extras]).then(([ids2, scenes, more]) => ({
+  const done = Promise.all([photoIds, Promise.all(ids.map((id) => views[id].full)), extras, cardP]).then(([ids2, scenes, more, card]) => ({
     card,
     photoIds: ids2,
     walk: { index: loop, scenes, ...more },
   }));
   for (const p of [corridor, photoIds, done, extras, ...Object.values(views).flatMap((v) => [v.quick, v.full])]) p.catch(() => {});
-  return { card, loop, corridor, views, extras, figure, scare, photoIds, done };
+  return { card: cardP, loop, corridor, views, extras, figure, scare, photoIds, done };
 }
 
 // Starts dealing and rendering all three lines of the next walk in the background.
@@ -1135,7 +1168,20 @@ function prepareLoop(school) {
   const titles = quiet(quickTitles(school, loop).finally(() => console.error(`[time] walk ${loop + 1}: lines at ${since(school)}s`)));
   const cards = quiet(titles.catch(() => null).then((lines) => dealCards(school, loop, lines)).finally(() => console.error(`[time] walk ${loop + 1}: dealt at ${since(school)}s`)));
   const contexts = [0, 1, 2].map(() => ({ cancelled: false }));
-  const options = [0, 1, 2].map((i) => quiet(cards.then((dealt) => job.run(contexts[i], () => renderOption(school, loop, dealt[i])))));
+  const options = [0, 1, 2].map((i) =>
+    quiet(
+      titles.catch(() => null).then((lines) =>
+        job.run(contexts[i], () =>
+          renderOption(
+            school,
+            loop,
+            quiet(cards.then((dealt) => dealt[i])),
+            lines ? quiet(corridorEditFor(school, loop, lines[i])) : null,
+          ),
+        ),
+      ),
+    ),
+  );
   school.next = { loop, titles, cards, options, contexts };
   return school.next;
 }
@@ -1143,8 +1189,8 @@ function prepareLoop(school) {
 // Once the kept version's photos exist, they are the school: the next lines are dealt
 // from them straight away. Its doors, depth maps and scares are recorded when done.
 function commit(school, option) {
-  school.committing = option.photoIds.then((photoIds) => {
-    school.changes.push(option.card);
+  school.committing = Promise.all([option.photoIds, option.card]).then(([photoIds, card]) => {
+    school.changes.push(card);
     Object.assign(school.photos, photoIds);
     if (school.changes.length >= DRAWS) school.ending = quiet(prepareEnding(school));
     else prepareLoop(school);

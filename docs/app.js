@@ -1149,14 +1149,38 @@ function choose(index) {
 // When the next place is not ready yet: no message. The lights go down and you keep
 // walking in the dark until it is there (render() brings the light back).
 function waitInTheDark(ready) {
+  const stage = $('#stage');
   let done = false;
-  ready.finally?.(() => {
+  let steps = null;
+  let scale = 1;
+  const stop = () => {
     done = true;
-  });
+    clearInterval(steps);
+    stage.classList.remove('dark-walk');
+    stage.getAnimations().forEach((a) => a.cancel());
+  };
+  ready.then?.(stop, stop);
   setTimeout(() => {
     if (done) return;
-    $('#stage').classList.add('blackout');
-    const steps = setInterval(() => (done ? clearInterval(steps) : state.audio?.footsteps(2)), 1600);
+    // Almost dark, and still walking: every footstep is a dip of the head and a little
+    // further in, so what you hear is what you see.
+    stage.classList.add('dark-walk');
+    const step = () => {
+      if (done) return;
+      state.audio?.footsteps(1);
+      const from = scale;
+      scale = Math.min(1.12, scale + 0.006);
+      stage.animate(
+        [
+          { transform: `translateY(0) scale(${from})` },
+          { transform: `translateY(0.8%) scale(${from + 0.002})`, offset: 0.25 },
+          { transform: `translateY(0) scale(${scale})` },
+        ],
+        { duration: 520, easing: 'ease-out', fill: 'forwards' },
+      );
+    };
+    step();
+    steps = setInterval(step, 560);
   }, 400);
 }
 
@@ -1690,9 +1714,8 @@ async function stepInto(scene) {
   const follow = followed();
   if (walker) {
     const from = currentScene();
-    state.audio?.footsteps(3, follow);
     const walked = await walk3d(async () => {
-      await walker.walk(from, scene, WALK_MS, { warp: warpNow() });
+      await walker.walk(from, scene, WALK_MS, { warp: warpNow(), onStart: () => state.audio?.footsteps(3, follow) });
       photo.src = scene.photo; // swap under the canvas so nothing flashes
       await photo.decode().catch(() => {});
     });
@@ -1727,7 +1750,10 @@ async function arriveAt(scene) {
   photo.src = scene.photo;
   await photo.decode().catch(() => {});
   $('#stage').classList.remove('blackout');
-  if (!(walker && (await walk3d(() => walker.arrive(scene, ARRIVE_MS, { warp: warpNow() }))))) {
+  const stepsIn = state.stepsOnArrive ?? 0;
+  state.stepsOnArrive = 0;
+  if (!(walker && (await walk3d(() => walker.arrive(scene, ARRIVE_MS, { warp: warpNow(), onStart: () => stepsIn && state.audio?.footsteps(stepsIn) }))))) {
+    if (stepsIn) state.audio?.footsteps(stepsIn);
     photo.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 1400, easing: 'ease-out' });
   }
 }
@@ -1797,7 +1823,7 @@ async function beginWalk(walk, line, sound) {
   applySound(sound);
   show('walk-screen');
   say(line ?? '');
-  state.audio?.footsteps(4);
+  state.stepsOnArrive = 4; // heard as the walk-in starts
   await arriveAt(walk.scenes[0]);
   render(walk.scenes[0]);
   scheduleFlicker(true);

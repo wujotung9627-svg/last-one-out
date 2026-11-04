@@ -147,6 +147,11 @@ async function drawnDepth(url) {
   return canvas;
 }
 
+// Head height while walking: lowest when a footstep lands (0.05 s, then every 0.5 s).
+function stepBob(t) {
+  return 0.014 * Math.cos((2 * Math.PI * (t + 0.2)) / 0.5);
+}
+
 function compile(gl, type, source) {
   const shader = gl.createShader(type);
   gl.shaderSource(shader, source);
@@ -309,12 +314,16 @@ export function createWalker(canvas) {
       cache.delete(url);
     },
 
-    async walk(from, to, ms, { warp = 0 } = {}) {
+    async walk(from, to, ms, { warp = 0, onStart = null } = {}) {
       const [a, b] = await Promise.all([prepare(from), prepare(to)]);
+      onStart?.(); // the footsteps start with the movement, not before it
       await animate(ms, (k) => {
         const go = ease(clamp01(k / 0.8));
-        const bob = Math.sin(k * Math.PI * 6) * 0.012 * (1 - k); // three footsteps
-        const sway = Math.sin(k * Math.PI * 3) * 0.006 * (1 + warp);
+        // Each footstep (heard every half second from 0.05 s) is the lowest point of a
+        // step: the head dips as the heel lands and rises between steps.
+        const t = (k * ms) / 1000;
+        const bob = stepBob(t) * (1 - 0.35 * k);
+        const sway = Math.sin(((t + 0.2) / 0.5) * Math.PI) * 0.006 * (1 + warp);
         // Into the dark first, then the next photo: a short overlap, no double image.
         const dim = clamp01((k - 0.58) / 0.22);
         const cross = ease(clamp01((k - 0.76) / 0.24));
@@ -345,13 +354,14 @@ export function createWalker(canvas) {
     },
 
     // Arriving at the start of a walk: out of the dark, settling into place.
-    async arrive(scene, ms, { warp = 0 } = {}) {
+    async arrive(scene, ms, { warp = 0, onStart = null } = {}) {
       const entry = await prepare(scene);
+      onStart?.();
       await animate(ms, (k) =>
         frame([
           {
             entry,
-            cam: [0, 0, 0.35 * (1 - ease(k))],
+            cam: [Math.sin((((k * ms) / 1000 + 0.2) / 0.5) * Math.PI) * 0.005, stepBob((k * ms) / 1000) * (1 - k), 0.35 * (1 - ease(k))],
             alpha: ease(k),
             lens: 1 + warp * 0.3 * (1 - ease(k)),
             wobble: warp * (1 - k) * 0.6,
