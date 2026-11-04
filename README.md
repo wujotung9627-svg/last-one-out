@@ -57,6 +57,10 @@ browser (public/)                                server.mjs (Node, no packages) 
 
 The submission video is a recording of the judges' version, cut with the help of Muse Spark: it watched the recording and chose the trailer's shots and title cards. The "how it is made" cards show the night's own photos, depth maps and SAM 3.1 boxes. The scripts are in `video/` (see `video/README.md`).
 
+## Why it matters
+
+Everyone carries a school they can't go back to: a teacher who never said their name, a ranking pinned on the wall. Horror games are usually one designer's nightmare; here the place, the fear and the ending come from the player's own memories, so every player gets their own school, and it changes each time it is remembered. It also shows what Meta's models now let one person do: a personal, photo-real game built in two days with no 3D artists, for about $15 of model calls across every test night.
+
 ## What's next
 
 Meta Quest. Every place is already a 3D surface built from the depth map Muse Image draws for each photo, so the next step is to open the same walk in the Quest browser with WebXR: standing in the corridor, turning your head to the sound of the basketball, answering the roll call out loud in the headset. This is a plan; it is not built yet.
