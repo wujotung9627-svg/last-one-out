@@ -16,9 +16,12 @@ All recordings below are from the Red Library sound-effects collection on the In
 | wooden-chair.mp3 | R17-41 Wooden Chair | https://archive.org/details/Red_Library_Creaks |
 | basketball.mp3 | Basketball Bounce and Roll (trimmed to start at the first bounce, mono, levelled) | YouTube channel “Free SFX”, https://www.youtube.com/watch?v=Cpda62quzUQ |
 | chimes.mp3 | R04-40 Department Store Chimes | https://archive.org/details/Red_Library_Bells_Horns_Whistles |
+| water-drip.mp3 | Water dripping sound effect 1 (10 s from 0:02, mono, hiss reduced, levelled) | YouTube channel “TheMSsoundeffects”, https://www.youtube.com/watch?v=-TiAPym7ObA |
 
 Everything else (the fluorescent hum, the school bell, chalk, crickets, frogs, the far scooter, the stingers) is synthesised in `audio.js`.
 
 `basketball.mp3` is not from the Red Library: the “Free SFX” channel publishes it as free to use and royalty-free; its original source is not stated. It is played through the game's corridor reverb and moves with the ball on screen.
+
+`water-drip.mp3` is not from the Red Library either: it was chosen by the author from the “TheMSsoundeffects” channel, which publishes it as a sound effect without stating a licence. The game cuts it into single drops and plays them at the corridor's sink, so only the corridor (where the taps are) drips.
 
 `pa-*.mp3` (the school speaker's fixed lines) are placeholders made with the macOS voices Meijia and Daniel, slowed, lowered and given a little tape wobble; the game plays them through its loudspeaker chain. They are meant to be replaced by a human recording with the same file names.

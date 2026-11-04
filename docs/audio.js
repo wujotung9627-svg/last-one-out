@@ -372,9 +372,15 @@ export function createAudio() {
 
   // A drop of water: a tiny click as it lands, then the ring of the little bubble it
   // makes, its pitch rising fast (that rise is what makes it sound wet), in the echo.
+  // With the recording: one real drop from it, cut at its onset, in place.
   function drip(gain = 0.22, pos = null) {
+    const where = pos ?? { x: (Math.random() - 0.5) * 4, y: -1.5, z: -2.5 - Math.random() * 3 };
+    if (dripSlices.length) {
+      const [offset, length] = dripSlices[Math.floor(Math.random() * dripSlices.length)];
+      if (playSample('drip', { offset, duration: length, gain: gain * 2.4, rate: 0.94 + Math.random() * 0.12, pos: where })) return;
+    }
     const at = ctx.currentTime + 0.02;
-    const out = pos ? placed(pos.x, pos.y, pos.z) : placed((Math.random() - 0.5) * 4, -1.5, -2.5 - Math.random() * 3);
+    const out = placed(where.x, where.y, where.z);
     burst(at, { type: 'highpass', freq: 2500, q: 0.7, peak: gain * 0.25, decay: 0.006, out });
     const f0 = 650 + Math.random() * 500;
     const ring = ctx.createOscillator();
@@ -551,7 +557,8 @@ export function createAudio() {
   night.gain.value = 0;
   night.connect(master);
   let nightTimer = null;
-  let tap = null; // where the leaking water is, and how loud: the sinks, or the mop bucket
+  let tap = null; // where the leaking tap is, and how loud
+  let dripSlices = []; // the single drops in the recording: [start, length] in seconds
 
   function cricket(at, x, z) {
     const out = placed(x, -1, z);
@@ -768,7 +775,13 @@ export function createAudio() {
     loadSample('chair', 'wooden-chair.mp3'),
     loadSample('chimes', 'chimes.mp3'),
     loadSample('basketball', 'basketball.mp3'), // optional; synthesised if missing
+    loadSample('drip', 'water-drip.mp3'),
   ]).then(() => {
+    if (samples.drip) {
+      // Each drop runs until just before the next one, at most a second (its echo).
+      const starts = onsets(samples.drip, { minGap: 0.2, threshold: 3 });
+      dripSlices = starts.map((t, i) => [t, Math.min(1, (starts[i + 1] ?? samples.drip.duration) - t - 0.02)]).filter(([, d]) => d > 0.15);
+    }
     if (samples.steps) stepSlices = onsets(samples.steps);
     if (samples.quick) quickSlices = onsets(samples.quick, { minGap: 0.14 });
   });
