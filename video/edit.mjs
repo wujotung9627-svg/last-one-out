@@ -66,12 +66,14 @@ const firstPhotoAt = events.find((e) => e.type === 'change' && e.key === 'photo'
 
 // No cut inside a line being written (or a speaker announcement still playing).
 const busy = [...lines.map((l) => [l.start - 0.2, l.done + (l.pa ? 2.2 : 0.9)]), ...scares.map(([a, b]) => [a - 1.2, b + 0.5])];
+// A cut inside a line moves to whichever edge of it is nearer: a shot that has only just
+// reached a long announcement ends before it rather than running through it.
 function snapIn(t) {
-  for (const [a, b] of busy) if (t > a && t < b) return Math.max(0, a - 0.1);
+  for (const [a, b] of busy) if (t > a && t < b) return t - a < b - t ? Math.max(0, a - 0.1) : b;
   return t;
 }
 function snapOut(t) {
-  for (const [a, b] of busy) if (t > a && t < b) return Math.min(LENGTH, b);
+  for (const [a, b] of busy) if (t > a && t < b) return t - a < b - t ? Math.max(0, a - 0.15) : Math.min(LENGTH, b);
   return t;
 }
 
@@ -176,7 +178,8 @@ function mustKeep() {
   for (const sc of scares) if (!roll || sc[0] < roll[0]) keep.push([sc[0] - 2.5, sc[1] + 0.6]);
   for (const [b0, b1] of balls) keep.push([b0 - 1.0, Math.min(b1, b0 + 7)]); // the ball rolling to your feet
   // each chalkboard choice: both erasures and the kept line being rewritten
-  for (let i = 0; i + 1 < erases.length; i++) if (erases[i + 1] - erases[i] < 8) keep.push([erases[i] - 2.5, erases[i + 1] + 4.5]), i++;
+  // (kept whole only when the shot already reaches into it: a second board can be left out)
+  for (let i = 0; i + 1 < erases.length; i++) if (erases[i + 1] - erases[i] < 8) keep.push([erases[i] - 2.5, erases[i + 1] + 4.5, 'board']), i++;
   return keep;
 }
 
@@ -187,7 +190,10 @@ function finalize(plan, list) {
     const from = Math.max(b.start, Math.min(b.end - 3, s.from ?? b.start));
     const to = Math.min(b.end, Math.max(from + 3, s.to ?? b.end));
     let start = snapIn(from), end = snapOut(to);
-    for (const [k0, k1] of mustKeep()) if (k0 < b.end && k1 > b.start) (start = Math.min(start, Math.max(b.start, k0))), (end = Math.max(end, Math.min(LENGTH, k1)));
+    for (const [k0, k1, kind] of mustKeep()) {
+      const [lo, hi] = kind === 'board' ? [start, end] : [b.start, b.end];
+      if (k0 < hi && k1 > lo) (start = Math.min(start, Math.max(b.start, k0))), (end = Math.max(end, Math.min(LENGTH, k1)));
+    }
     start = +start.toFixed(2);
     end = +end.toFixed(2);
     return { ...s, start, end, snapped: start !== +from.toFixed(2) || end !== +to.toFixed(2) };
@@ -270,7 +276,7 @@ async function build() {
   execFileSync('node', [join(HERE, 'cards.mjs'), RUN, join(WORK, 'cards'), book], { stdio: 'inherit' });
   const C = join(WORK, 'cards');
   const how = join(WORK, 'how.png');
-  await png(`<div style="height:1080px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;color:#f1ece0"><div style="font:400 120px 'Bebas Neue';letter-spacing:.03em">How it is made</div><div style="font:400 36px 'Courier Prime';color:#b9b3a6">Every photo you just saw was made by Meta's models in one live game, recorded for the replay.</div></div>`, how);
+  await png(`<div style="height:1080px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:28px;color:#f1ece0"><div style="font:400 120px 'Bebas Neue';letter-spacing:.03em">How it is made</div><div style="font:400 34px 'Courier Prime';color:#b9b3a6;max-width:1400px;text-align:center;line-height:1.5">Every photo you just saw was made by Meta's models in one live game, recorded for the judges' version.</div></div>`, how);
   parts.push(card(how, 3, 'how', 0.02));
   parts.push(card(join(C, '1-bible.png'), 9, 'c1'));
   parts.push(card(join(C, '2-depth.png'), 8, 'c2'));
@@ -300,7 +306,7 @@ async function build() {
   ff(...parts.flatMap((p) => ['-i', p]), '-filter_complex', graph, '-map', '[v]', '-map', '[a]', ...ENC, joined);
   // Quiet horror sound with loud stings: lift it and let a limiter catch the stings.
   const final = join(REC, 'demo.mp4');
-  ff('-i', joined, '-c:v', 'copy', '-af', 'volume=4dB,alimiter=limit=0.78:attack=2:release=60:level=false', '-c:a', 'aac', '-b:a', '256k', '-ar', '48000', final);
+  ff('-i', joined, '-c:v', 'copy', '-af', 'volume=3dB,alimiter=limit=0.7:attack=1:release=60:level=false', '-c:a', 'aac', '-b:a', '256k', '-ar', '48000', final);
   console.log('demo', final, probe(final).toFixed(1), 's');
 }
 
