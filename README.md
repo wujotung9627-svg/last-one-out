@@ -63,7 +63,7 @@ Everyone carries a school they can't go back to: a teacher who never said their 
 
 ## What's next
 
-Meta Quest. Every place is already a 3D surface built from the depth map Muse Image draws for each photo, so the next step is to open the same walk in the Quest browser with WebXR: standing in the corridor, turning your head to the sound of the basketball, answering the roll call out loud in the headset. This is a plan; it is not built yet.
+Meta Quest. Every place is already a 3D surface built from the depth map Muse Image draws for each photo, so the next step is to open the same walk in the Quest browser with WebXR: standing in the corridor, turning your head to the sound of the basketball, answering the roll call out loud in the headset. VR needs places to be in, and building them by hand is slow and expensive; here every player's own memories become a place of their own. This is a plan; it is not built yet.
 
 ## Built during the event
 
