@@ -1896,12 +1896,17 @@ function renderBook() {
 
 // The afternoon after. The teacher watches from the door while the credits roll; when
 // they end, nobody is there. Then the title, and below it tonight's contact book.
-function finish() {
+async function finish() {
   state.audio?.night('off');
-  return guarded(t('bellWait'), async () => {
+  // Only the wait for the afternoon photo shows "the bell"; the ending itself does not.
+  await guarded(t('bellWait'), async () => {
     const [ending, report] = await Promise.all([api('/api/ending', { schoolId: state.schoolId }), state.report ?? requestReport()]);
     state.ending = ending;
     state.reportText = report;
+  });
+  if (!state.ending) return;
+  {
+    const ending = state.ending;
     show('ending-screen');
     const daylight = $('#daylight');
     const empty = $('#daylight-empty');
@@ -1935,7 +1940,7 @@ function finish() {
     const page = $('#report');
     page.hidden = false;
     page.animate([{ opacity: 0, transform: 'translateY(12px)' }, { opacity: 1, transform: 'none' }], { duration: REDUCED_MOTION ? 1 : 1200, fill: 'forwards' }); // below the title; you scroll to it
-  });
+  }
 }
 
 // The credits roll over the contact book, then leave it to you.
