@@ -1514,14 +1514,15 @@ async function ballThenFigure() {
       flash.dataset.src = figure.photo;
       await flash.decode().catch(() => {});
     }
-    const rolling = rollBall({ toFeet: true });
-    await pause(3300); // the ball is well on its way; the eyes are on it
+    // The ball rolls all the way to your feet first. Only when you look up from it is
+    // someone standing in the corridor.
+    await rollBall({ toFeet: true });
+    await pause(900);
     if (sameScene(currentScene(), scene) && figure?.photo) {
       flash.getAnimations().forEach((a) => a.cancel());
-      flash.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 1600, easing: 'ease-in', fill: 'forwards' }); // silently
+      flash.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 700, easing: 'ease-out', fill: 'forwards' }); // silently
     }
-    await rolling;
-    await pause(2600);
+    await pause(3200);
     if (!sameScene(currentScene(), scene)) return;
     flicker();
     await pause(140);
@@ -1803,7 +1804,20 @@ async function theyTurn(photo) {
   await frame.decode().catch(() => {});
   $('#board-name').hidden = true;
   $('#marks').replaceChildren();
-  frame.hidden = false; // a hard cut: no sound at all
+  // The last scare: a hard cut to every masked face at once, a stinger, and the room
+  // lurches towards you.
+  frame.hidden = false;
+  state.audio?.stinger();
+  if (!REDUCED_MOTION) {
+    frame.animate(
+      [{ transform: 'scale(1)', filter: 'brightness(1.9) contrast(1.25)' }, { transform: 'scale(1.04)', filter: 'brightness(1)', offset: 0.18 }, { transform: 'scale(1.08)', filter: 'brightness(0.95)' }],
+      { duration: 2200, easing: 'ease-out', fill: 'forwards' },
+    );
+    $('#stage').animate(
+      [0, 1, 2, 3, 4, 5, 6, 7].map((i) => ({ transform: `translate(${(Math.random() - 0.5) * 18 * (1 - i / 8)}px, ${(Math.random() - 0.5) * 12 * (1 - i / 8)}px)` })),
+      { duration: 600 },
+    );
+  }
   await pause(2200);
   for (const gap of [0, 650]) {
     await pause(gap);
@@ -1816,6 +1830,7 @@ async function theyTurn(photo) {
   await pause(900);
   state.audio?.flicker();
   frame.hidden = true;
+  frame.getAnimations().forEach((a) => a.cancel());
   $('#stage').classList.add('blackout');
   await pause(2200);
 }
